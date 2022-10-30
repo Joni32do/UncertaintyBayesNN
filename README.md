@@ -65,7 +65,7 @@ I have to discuss this with Nils -> Many methods are already implemented
 - Numpy 1.20.3
 
 ## Sources
-'''
+```
 @ARTICLE{9756596,
 author={Jospin, Laurent Valentin and Laga, Hamid and Boussaid, Farid and Buntine, Wray and Bennamoun, Mohammed},
 journal={IEEE Computational Intelligence Magazine}, 
@@ -98,4 +98,4 @@ doi={10.1109/MCI.2022.3155327}
   year = {2021},
   copyright = {Creative Commons Attribution Non Commercial No Derivatives 4.0 International}
 }
-'''
+```
