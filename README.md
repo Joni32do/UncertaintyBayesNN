@@ -65,5 +65,37 @@ I have to discuss this with Nils -> Many methods are already implemented
 - Numpy 1.20.3
 
 ## Sources
+'''
+@ARTICLE{9756596,
+author={Jospin, Laurent Valentin and Laga, Hamid and Boussaid, Farid and Buntine, Wray and Bennamoun, Mohammed},
+journal={IEEE Computational Intelligence Magazine}, 
+title={Hands-On Bayesian Neural Networks—A Tutorial for Deep Learning Users}, 
+year={2022},
+volume={17},
+number={2},
+pages={29-48},
+doi={10.1109/MCI.2022.3155327}
+}
 
+@misc{https://doi.org/10.48550/arxiv.2104.06010,
+  doi = {10.48550/ARXIV.2104.06010},
+  url = {https://arxiv.org/abs/2104.06010},
+  author = {Praditia, Timothy and Karlbauer, Matthias and Otte, Sebastian and Oladyshkin, Sergey and Butz, Martin V. and Nowak, Wolfgang},
+  keywords = {Machine Learning (cs.LG), Neural and Evolutionary Computing (cs.NE), FOS: Computer and information sciences, FOS: Computer and information sciences},
+  title = {Finite Volume Neural Network: Modeling Subsurface Contaminant Transport},
+  publisher = {arXiv},
+  year = {2021},
+  copyright = {Creative Commons Attribution 4.0 International}
+}
 
+@misc{https://doi.org/10.48550/arxiv.2111.11798,
+  doi = {10.48550/ARXIV.2111.11798},
+  url = {https://arxiv.org/abs/2111.11798},
+  author = {Karlbauer, Matthias and Praditia, Timothy and Otte, Sebastian and Oladyshkin, Sergey and Nowak, Wolfgang and Butz, Martin V.},
+  keywords = {Machine Learning (cs.LG), FOS: Computer and information sciences, FOS: Computer and information sciences},
+  title = {Composing Partial Differential Equations with Physics-Aware Neural Networks},
+  publisher = {arXiv},
+  year = {2021},
+  copyright = {Creative Commons Attribution Non Commercial No Derivatives 4.0 International}
+}
+'''
