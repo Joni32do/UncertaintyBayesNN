@@ -31,13 +31,13 @@ torch.manual_seed(42)
 # Dataset
 ######
 
-n_dim = 2
+n_dim = 1
 
-n_train = 200
-n_test = 40000 #better if it is a square
+n_train = 20
+n_test = 81 #better if it is a square
 
 in_dis = 2 #Assumes symmetric distance and zero centering
-out_dis = 2.5 #in_dis < out_dis
+out_dis = 3 #in_dis < out_dis
 
 aleatoric_train = 0 #aleatoric uncertainty
 aleatoric_test = 0
@@ -47,13 +47,14 @@ if n_dim == 1:
 
     ### 1D Regression Dataset
 
-
+    #I could also discriminate like in 2D between equidistant und random
 
     def f(x,aleatoric=0):
         '''
         cubic polynomial R1 -> R1
         '''
-        return torch.pow(x,4) - torch.pow(x,2) + 5 * torch.pow(x,1) + aleatoric*(torch.rand(x.size())-0.5)
+        # return torch.pow(x,4) - torch.pow(x,2) + 5 * torch.pow(x,1) + aleatoric*(torch.rand(x.size())-0.5)
+        return torch.sin(2*torch.pi *x)/x + aleatoric*(torch.rand(x.size())-0.5)
 
 
     x_train = torch.reshape(torch.linspace(-in_dis,in_dis,n_train),(n_train,1))
@@ -94,7 +95,7 @@ else:
 # Architecture
 ###### 
 
-n_hidden = 20
+n_hidden = 5
 
 n_in = x_train.size(dim=1) #0st dim data, 1st dim Dimensions of Vector
 n_out = y_train.size(dim=1)
@@ -136,17 +137,38 @@ else:
 ######
 
 
-train = False
+train_when_exist = False #If model exists already doesn't train it
+
+## Test 
+# n_dim
+# n_train
+# n_test
+
+# in_dis   #Assumes symmetric distance and zero centering
+# out_dis  #in_dis < out_dis
+
+# aleatoric_train
+# aleatoric_test
+
+
+## Architecture
+# n_hidden = 20
+
+## Hyperparameters
+epoch = 10000
+lr = 0.01
+loss_collection = []
+
 
 # filename = "E10e6H200Lre-3.pth"
 # filename = "bayes_TutoE10e4H20Lr10e-2Sigmoid.pth"
-filename = "2D-Test.pth"
+filename = '_'.join([str(n_dim)+'D','E'+str(epoch),'H'+str(n_hidden),'T'+str(n_train)]) + '.pth'
 
 
 pathFolder = Path("./simpleReg/models/")
 pathTo = os.path.join(pathFolder,filename)
 
-if train:
+if train_when_exist or not os.path.exists(pathTo):
 
 
     #############################
@@ -155,10 +177,8 @@ if train:
     #############################
 
 
-    ## Hyperparameters
-    epoch = 10000
-    lr = 0.01
-    loss_collection = []
+    
+    
 
 
     mse_loss = nn.MSELoss()
@@ -175,7 +195,7 @@ if train:
         loss.backward()
         optimizer.step()
         if step % 100 == 0:
-            print(f'\r Epoch {step}: Loss: {loss.item()}')
+            print("\r",(f'\r Epoch {step}: Loss: {loss.item()}'),end="")
             loss_collection.append(loss.item())
 
 
@@ -246,25 +266,41 @@ else:
     x_test = out_dis * 2 * (torch.rand((n_test,2))-0.5)
     y_test = torch.reshape(f_2D(x_test,aleatoric=aleatoric_test),(n_test,1))
     y_pred = model(x_test)
+    X12 = torch.zeros((n_test,2))
+    X12[:,0] = torch.flatten(X1)
+    X12[:,1] = torch.flatten(X2)
+    z_pred = model(X12)
+    z_grid = torch.reshape(z_pred,(n_test_dim,n_test_dim)).detach().numpy()
+    error = np.abs(z_grid - Z.numpy())
 
-
-    # plt.figure(figsize=(10,5))
-    # plt.subplot(1,2,1)
-    fig, ax = plt.subplots(subplot_kw={"projection":"3d"})
-    surf = ax.plot_surface(X1,X2,Z, cmap=cm.summer, linewidth=0, alpha = 0.7)
+    fig = plt.figure(figsize=plt.figaspect(0.5)) #Plots a figure 2:1
+    ax = fig.add_subplot(1,2,1,projection="3d")
+    surf = ax.plot_surface(X1,X2,Z, cmap=cm.summer, linewidth=0, alpha = 0.7, label='function')
+    scatter_z = ax.scatter(X12[:,0],X12[:,1],z_pred.detach().numpy(), label='prediction')
+    surf_error = ax.plot_surface(X1,X2, error, cmap=cm.Reds, linewidth=0, alpha = 0.7, label='error')
     fig.colorbar(surf, shrink=0.5, aspect=5)
-    # scatter_train = ax.scatter(x_train[:,0],x_train[:,1], y_train, marker='o')
-    # scatter_test = ax.scatter(x_test[:,0], x_test[:,1], y_test, marker = '^')
-    scatter_pred = ax.scatter(x_test[:,0], x_test[:,1], y_pred.detach().numpy(), marker = 'o')
-    # fig.legend(['function','train_data','test_data','prediction'])
-    # Add a color bar which maps values to colors.
+    # ax.legend(handles=[surf, scatter_z, surf_error])
+    
+
+    #Second Plot
+    ax1 = fig.add_subplot(1,2,2,projection='3d')
+    scatter_train = ax1.scatter(x_train[:,0],x_train[:,1], y_train, marker='o', label='train_data')
+    scatter_test = ax1.scatter(x_test[:,0], x_test[:,1], y_test, marker = '^', label='test_data')
+    scatter_pred = ax1.scatter(x_test[:,0], x_test[:,1], y_pred.detach().numpy(), marker = 'o',label='prediction')
+    # ax1.legend(handles=[scatter_train,scatter_test,scatter_pred])
     
     plt.show()
+
+
 
 ##################################################################################################################
 # Measure Uncertainty
 ######
 
+#First mu, then sigma of dist
+#Before I get fancy with this I first should handle general architectures and understand bnnLayers better
+for param in model.parameters():
+    print(param)
 
 
 
