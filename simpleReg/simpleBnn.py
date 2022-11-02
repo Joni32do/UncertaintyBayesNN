@@ -14,7 +14,7 @@ from matplotlib import cm
 
 '''
 Until I have achieved something meaningful I will mainly work in this file and not refactor in main and other sub files.
-This might be ugly but better then create a good framework for shit
+This might be ugly but better then create a good framework for bad code
 '''
 
 ##################################################################################################################
@@ -32,6 +32,7 @@ torch.manual_seed(42)
 ######
 
 n_dim = 1
+option = 0
 
 n_train = 20
 n_test = 81 #better if it is a square
@@ -49,19 +50,26 @@ if n_dim == 1:
 
     #I could also discriminate like in 2D between equidistant und random
 
-    def f(x,aleatoric=0):
+    def f(x,aleatoric=0,option=0):
         '''
         cubic polynomial R1 -> R1
+
         '''
-        # return torch.pow(x,4) - torch.pow(x,2) + 5 * torch.pow(x,1) + aleatoric*(torch.rand(x.size())-0.5)
-        return torch.sin(2*torch.pi *x)/x + aleatoric*(torch.rand(x.size())-0.5)
+        unc = aleatoric*(torch.rand(x.size())-0.5)
+        if option == 0:
+            return torch.pow(x,4) - torch.pow(x,2) + 5 * torch.pow(x,1) + unc
+        elif option == 1:
+            return torch.sin(2*torch.pi *x)/x + unc
+        else:
+            return torch.zeros(x.size())
+        
 
 
     x_train = torch.reshape(torch.linspace(-in_dis,in_dis,n_train),(n_train,1))
-    y_train = f(x_train,aleatoric_train)
+    y_train = f(x_train,aleatoric_train,option)
 
     x_test = torch.reshape(torch.linspace(-out_dis,out_dis,n_test),(n_test,1))
-    y_test = f(x_test,aleatoric_test)
+    y_test = f(x_test,aleatoric_test,option).detach().numpy()
 else:
     ### 2D Regression Dataset
 
@@ -75,16 +83,21 @@ else:
 
     # Train
     x_train = in_dis * 2 * (torch.rand((n_train,2))-0.5)
-    y_train = torch.reshape(f_2D(x_train,aleatoric=aleatoric_train),(n_train,1))
+    y_train = torch.reshape(f_2D(x_train,aleatoric=aleatoric_train),(n_train,1)).detach().numpy()
 
 
     # Test
     n_test_dim = int(np.sqrt(n_test))
+
+    # Grid like data
     x1_test = torch.linspace(-out_dis,out_dis,n_test_dim)
     x2_test = torch.linspace(-out_dis,out_dis,n_test_dim)
-
     X1,X2 = torch.meshgrid(x1_test, x2_test)
     Z = f_2D(X1,X2,aleatoric_test)
+
+    # Random data
+    x_test = out_dis * 2 * (torch.rand((n_test,2))-0.5)
+    y_test = torch.reshape(f_2D(x_test,aleatoric=aleatoric_test),(n_test,1)).detach().numpy()
 
     
 
@@ -162,7 +175,7 @@ loss_collection = []
 
 # filename = "E10e6H200Lre-3.pth"
 # filename = "bayes_TutoE10e4H20Lr10e-2Sigmoid.pth"
-filename = '_'.join([str(n_dim)+'D','E'+str(epoch),'H'+str(n_hidden),'T'+str(n_train)]) + '.pth'
+filename = '_'.join([str(option),str(n_dim)+'D','E'+str(epoch),'H'+str(n_hidden),'T'+str(n_train)]) + '.pth'
 
 
 pathFolder = Path("./simpleReg/models/")
@@ -232,20 +245,26 @@ else:
 model.eval()
 
 
+#For stochastic Neural Networks - draws 20 times (pointless for non-stochastic NN)
+draws = 20
 
+y_stoch = np.zeros((n_test,n_out,draws))
+for i in range(draws-1):
+    y_stoch[:,:,i] = model(x_test).detach().numpy()
+y_pred_avg = np.mean(y_stoch,axis=-1)
 
+error_pred = np.abs(y_test - y_pred_avg)
+print(error_pred)
+error_max = np.max(error_pred)
+error_mean = np.mean(error_pred)
+error_draw = y_stoch - y_pred_avg #Autocast-to Tensor ^3
+print(error_pred, error_max, error_mean, error_draw)
+#Sigma Hat
+# s = 1/(draws - 1) * error_draw@error_draw.T
+# sigma_hat = torch.linalg.inv(s)
+# nssr = torch.matmul()
 
 if n_dim==1:
-    y_pred = model(x_test)
-    if bayes:
-        draws = 20
-        y_pred_avg = y_pred.detach().clone()
-        for i in range(draws-1):
-            y_pred_iter = model(x_test)
-            # plt.plot(x_test, y_pred_iter.detach().numpy())
-            y_pred_avg += y_pred_iter
-        y_pred_avg = y_pred_avg/draws
-
 
 
     plt.figure(figsize=(10,5))
@@ -255,29 +274,28 @@ if n_dim==1:
     plt.subplot(1,2,2)
     plt.plot(x_test, y_test, 'go')
     plt.plot(x_test, f(x_test,0), 'bx')
-    plt.plot(x_test, y_pred.detach().numpy(),'r--')
-    plt.plot(x_test, y_pred_avg.detach().numpy())
+    plt.plot(x_test, y_stoch[:,:,0],'r--')
+    plt.plot(x_test, y_pred_avg)
     plt.title("Model Evaluation")
     plt.legend(['data with noise','data','single sample','average of 20 samples']) #20 magic number
     plt.show()
 
 else:
-    
-    x_test = out_dis * 2 * (torch.rand((n_test,2))-0.5)
-    y_test = torch.reshape(f_2D(x_test,aleatoric=aleatoric_test),(n_test,1))
-    y_pred = model(x_test)
+  
+    #TODO: Devide Square_Grid and Random data more clearly 
     X12 = torch.zeros((n_test,2))
     X12[:,0] = torch.flatten(X1)
     X12[:,1] = torch.flatten(X2)
     z_pred = model(X12)
     z_grid = torch.reshape(z_pred,(n_test_dim,n_test_dim)).detach().numpy()
-    error = np.abs(z_grid - Z.numpy())
+    error_pred = np.abs(z_grid - Z.numpy())
 
+    # First Plot
     fig = plt.figure(figsize=plt.figaspect(0.5)) #Plots a figure 2:1
     ax = fig.add_subplot(1,2,1,projection="3d")
     surf = ax.plot_surface(X1,X2,Z, cmap=cm.summer, linewidth=0, alpha = 0.7, label='function')
     scatter_z = ax.scatter(X12[:,0],X12[:,1],z_pred.detach().numpy(), label='prediction')
-    surf_error = ax.plot_surface(X1,X2, error, cmap=cm.Reds, linewidth=0, alpha = 0.7, label='error')
+    surf_error = ax.plot_surface(X1,X2, error_pred, cmap=cm.Reds, linewidth=0, alpha = 0.7, label='error')
     fig.colorbar(surf, shrink=0.5, aspect=5)
     # ax.legend(handles=[surf, scatter_z, surf_error])
     
@@ -286,7 +304,7 @@ else:
     ax1 = fig.add_subplot(1,2,2,projection='3d')
     scatter_train = ax1.scatter(x_train[:,0],x_train[:,1], y_train, marker='o', label='train_data')
     scatter_test = ax1.scatter(x_test[:,0], x_test[:,1], y_test, marker = '^', label='test_data')
-    scatter_pred = ax1.scatter(x_test[:,0], x_test[:,1], y_pred.detach().numpy(), marker = 'o',label='prediction')
+    scatter_pred = ax1.scatter(x_test[:,0], x_test[:,1], y_stoch[:,:,0].detach().numpy(), marker = 'o',label='prediction')
     # ax1.legend(handles=[scatter_train,scatter_test,scatter_pred])
     
     plt.show()
@@ -299,8 +317,19 @@ else:
 
 #First mu, then sigma of dist
 #Before I get fancy with this I first should handle general architectures and understand bnnLayers better
-for param in model.parameters():
-    print(param)
+
+params = [param for param in model.parameters()]
+weight_mu_last_layer = params[-4].detach().numpy()
+weight_sigma_last_layer = np.exp(params[5].detach().numpy())
+print(np.argmax(weight_sigma_last_layer))
+
+
+# fig = plt.figure()
+# x = np.linspace(-10,10,1000)
+# for mu, sigma in enumerate((weight_mu_last_layer,weight_sigma_last_layer)):
+#     plt.plot(x, np.normal(mu,sigma))
+
+
 
 
 
@@ -312,4 +341,19 @@ for param in model.parameters():
 
 #Calibration Curve
 
-# AUC
+# num_bins = 100
+# # the histogram of the actual error distribution
+# n, bins, patches = ax.hist(errors_np.flatten(), num_bins, density=True, label='Observed histogram')
+# ax.set_xlabel('Actual prediction error')
+# ax.set_ylabel('Probability density')
+
+# covs = stochasticPreds - predictions
+
+# covs = torch.matmul(covs, torch.transpose(covs, 1, 2))/(args.nruntests-1.)
+# weigths = torch.linalg.inv(covs) #
+
+# nssr = torch.matmul(errors[:,np.newaxis,:], torch.matmul(weigths, errors[:,:,np.newaxis]))
+# nssr = nssr.cpu().numpy().flatten()
+# nssr = np.sort(nssr)
+# p_obs = np.linspace(1./nssr.size,1.0,nssr.size)
+# p_pred = Chi2Dist.cdf(nssr, 9);
