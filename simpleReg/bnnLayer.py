@@ -265,7 +265,7 @@ class MeanFieldGaussianFeedForward(VIModule) :
 			
 			self.noiseSourceBias = Normal(torch.zeros(out_features), torch.ones(out_features))
 			
-			self.addLoss(lambda s : 0.5*s.getSampledBias().pow(2).sum()/biasPriorSigma**2)
+			self.addLoss(lambda s : 0.5*s.getSampledBias().pow(2).sum()/biasPriorSigma**2)##
 			self.addLoss(lambda s : -self.out_features/2*np.log(2*np.pi) - 0.5*s.samples['bNoiseState'].pow(2).sum() - self.lbias_sigma.sum())
 			
 			
@@ -291,35 +291,38 @@ class MeanFieldGaussianFeedForward(VIModule) :
 		return nn.functional.linear(x, self.samples['weights'], bias = self.samples['bias'] if self.has_bias else None)
 
 
-
-
-
-
 #My own which doesnt work 
 class LinearBayes(nn.Module):
     """
     Implementation of a linear layer with Bayesian weights.
 
-    At the moment the initial mu and sigma must already fit the required size of
-    the matrices of weight and bias respectively to n_in and n_out 
-    torch.Tensor(n_out, n_in)
+    At the moment the initial mu and sigma are scalar and for both weights and bias
 
     TODO: Add bias
     """
-    def __init__(self, mu, sigma):
+    def __init__(self, n_in, n_out, mu_init=0, sigma_init=1):
         super(LinearBayes, self).__init__()
+        #Weights
+        self.mu_w = nn.Parameter(torch.rand(n_out, n_in) - 0.5)
+        self.sigma_w = nn.Parameter(torch.log(sigma_init*torch.ones(n_out,n_in)))
+        self.eps_w = dist.normal.Normal(torch.zeros(n_out,n_in), torch.ones(n_out,n_in))
+        #Bias
+        
+        self.mu_b = nn.Parameter(torch.rand(n_out,1) - 0.5)
+        self.sigma_b = nn.Parameter(torch.log(sigma_init*torch.ones(n_out,1)))
+        self.eps_b = dist.normal.Normal(torch.zeros(n_out,1), torch.ones(n_out,1))
 
-        self.mu = nn.Parameter(mu, requires_grad=True)
-        self.sigma = nn.Parameter(sigma, requires_grad=True)
-        self.weightsDist = dist.normal.Normal(self.mu, self.sigma)
-        self.weights = 0.0
+        self.weights = None #One could also init with something
+        self.bias = None 
 
-    def sample(self):
-        self.weights = self.weightsDist.sample()
-    
+    def sample(self, stochastic=True):
+        self.weights = self.mu_w + (torch.exp(self.sigma_w) * self.eps_w.sample() if stochastic else 0)
+        self.bias = self.mu_b + (torch.exp(self.sigma_b)*self.eps_b.sample() if stochastic else 0)
+        # print("Gewichte\n",self.weights,"\nBias\n",self.bias)
     
     def forward(self, x):
         self.sample()
-        return F.linear(x, self.weights)
+        # print("SIzeBWX",self.bias.size(),self.weights.size(),x.size())
+        return F.linear(x, self.weights, torch.t(self.bias))
 
 
