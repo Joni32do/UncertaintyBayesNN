@@ -9,14 +9,16 @@ import datetime
 
 import numpy as np
 import matplotlib.pyplot as plt
-
+from matplotlib import cm
+from scipy.stats import chi2 as Chi2Dist
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributions as dist
+
 from bnnLayer import *
-from matplotlib import cm
+
 
 
 
@@ -37,16 +39,16 @@ torch.manual_seed(42)
 #I use no DataLoader
 
 n_dim = 1
-option = 2
+option = 1
 
 n_train = 20
-n_test = 400 #better if it is a square
+n_test = 16 #better if it is a square
 
 in_dis = 2 #Assumes symmetric distance and zero centering
 out_dis = 2.5 #in_dis < out_dis
 
-aleatoric_train = 0.01 #aleatoric uncertainty
-aleatoric_test = 0.1
+aleatoric_train = 0.001 #aleatoric uncertainty
+aleatoric_test = 0.01
 
 #TODO: If else decision is ugly
 if n_dim == 1:
@@ -115,7 +117,9 @@ else:
 # Architecture
 ###### 
 
-n_hidden = 10
+
+bayes = False
+n_hidden = 100
 
 n_in = x_train.size(dim=1) #0st dim data, 1st dim Dimensions of Vector
 n_out = y_train.size(dim=1)
@@ -127,10 +131,10 @@ y_train.detach().numpy()
 # mu2 = torch.zeros((n_out, n_hidden))
 # sigma2 = torch.ones((n_out, n_hidden))
 mu1 = 0
-sigma1 = 1
+sigma1 = 0
 
 mu2 = 0
-sigma2 = 1
+sigma2 = 0
 #self, prior_mu, prior_sigma, in_features, out_features, bias=True
 
 # What kind of Bayes_Layer
@@ -138,7 +142,7 @@ sigma2 = 1
 # bnnG: BayesLinear
 # mine: LinearBayes
 # tuto: MeanFieldGaussianFeedForward
-bayes = True
+
 
 if bayes:
     model = nn.Sequential(LinearBayes(n_in, n_hidden, mu1, sigma1),
@@ -172,7 +176,8 @@ train = "VI"
 # filename = "E10e6H200Lre-3.pth"
 # filename = "bayes_TutoE10e4H20Lr10e-2Sigmoid.pth"
 filename = '_'.join([str(n_dim)+'D','O'+str(option),train,'E'+str(epoch),'H'+str(n_hidden),'T'+str(n_train)])
-
+if not bayes:
+    filename = filename + "NB"
 
 pathModel = Path("./simpleReg/models/")
 pathTo = os.path.join(pathModel,filename+'.pth')
@@ -210,36 +215,46 @@ if train_when_exist or not os.path.exists(pathTo):
     #############################
     elif train == 'MC':
 
-        def step():
-            pass
-
-        sample = []
-        theta_0 = torch.nn.utils.parameters_to_vector(model.parameters())
+        step = 0
+        accepted_steps = 0
+        step_size = 0.001
         
-        theta_old = theta_0
-        loss_old = np.infty
-        step_size = 0.1
+        n_steps = 10000
+        loss_old = mse_loss(model(x_train),y_train)
+        old_state_dict = model.state_dict()
+        
+        # temp_model = deepcopy(model)
+        #This 
+        layerNames = ['0.mu_w',
+                '0.sigma_w',
+                '0.mu_b',
+                '0.sigma_b',
+                '2.mu_w',
+                '2.sigma_w',
+                '2.mu_b',
+                '2.sigma_b']
+        
 
-        theta_new = torch.normal(theta_old, step_size)
-        state_dict["2.sigma_b"] = torch.rand((1,1)) 
-
-        # 0.mu_w
-        # 0.sigma_w
-        # 0.mu_b
-        # 0.sigma_b
-        # 2.mu_w
-        # 2.sigma_w
-        # 2.mu_b
-        # 2.sigma_b
-
-        pred = model(x_train)
-        loss_new = mse_loss(pred, y_train)
-        acceptance = loss_old/loss_new
-        if acceptance >= 1 or acceptance > np.random.uniform(0,1):
-            loss_old = loss_new
-            theta_old = theta_new
-            sample.append(theta_new)
-
+        while step < n_steps:
+            temp_state_dict = model.state_dict()
+            for l in layerNames:
+                temp_state_dict[l] = torch.normal(temp_state_dict[l], step_size)
+            # print(temp_state_dict)
+            model.load_state_dict(temp_state_dict)
+            model.parameters_to_vector
+            pred = model(x_train)
+            loss_new = mse_loss(pred, y_train)
+            acc = loss_old/loss_new
+            if acc >= np.random.uniform(0,1):
+                loss_old = loss_new
+                loss_collection.append(loss_new.detach().numpy())
+                old_state_dict = temp_state_dict
+                accepted_steps += 1
+            else:
+                model.load_state_dict(old_state_dict)
+            step += 1
+            print(step)
+        print(accepted_steps/step)
 
 
 
@@ -265,7 +280,7 @@ model.eval()
 
 
 #For stochastic Neural Networks - draws 20 times (pointless for non-stochastic NN)
-draws = 10
+draws = 20
 
 y_stoch_test = np.zeros((n_test,n_out,draws))
 y_stoch_train = np.zeros((n_train,n_out,draws))
@@ -277,6 +292,8 @@ y_pred_avg_test = np.mean(y_stoch_test,axis=-1)
 y_pred_avg_train = np.mean(y_stoch_train,axis=-1)
 
 #TODO:
+error_train = np.abs(y_train-y_pred_avg_train)
+error_test = np.abs(y_test-y_pred_avg_test)
 # error_pred = np.abs(y_test - y_pred_avg)
 # error_max = np.max(error_pred)
 # error_mean = np.mean(error_pred)
@@ -294,8 +311,8 @@ if n_dim==1:
     #Prediction Error
     fig = plt.figure(figsize=(5,5))
     ax = fig.add_subplot(1,1,1)
-    ax.plot(x_train, np.abs(y_train-y_pred_avg_train), label='train error')
-    ax.plot(x_test, np.abs(y_test-y_pred_avg_test), label='test error')
+    ax.plot(x_train, error_train, label='train error')
+    ax.plot(x_test, error_test, label='test error')
     ax.set_yscale('log')
     plt.title("Prediction Error")
 
@@ -320,14 +337,14 @@ if n_dim==1:
     plt.title("Single Draw Deviation")
     plt.savefig(os.path.join(pathFigure,"Deviation.svg"))
     
-    #Aleatoric Noise
-    plt.figure(figsize=(5,5))
-    #aleatoric*(torch.rand(x.size())-0.5)
-    plt.scatter(x_test.detach().numpy(),y_test-f(x_test,0,option).detach().numpy(),label='noise test')
-    plt.scatter(x_train, y_train-f(x_train,0,option),label='noise train')
-    plt.title("noise")
-    plt.legend()
-    plt.savefig(os.path.join(pathFigure,"noise.svg"))
+    # #Aleatoric Noise
+    # plt.figure(figsize=(5,5))
+    # #aleatoric*(torch.rand(x.size())-0.5)
+    # plt.scatter(x_test.detach().numpy(),y_test-f(x_test,0,option).detach().numpy(),label='noise test')
+    # plt.scatter(x_train, y_train-f(x_train,0,option),label='noise train')
+    # plt.title("noise")
+    # plt.legend()
+    # plt.savefig(os.path.join(pathFigure,"noise.svg"))
 
     #Variance
     fig = plt.figure(figsize=(5,5))
@@ -339,9 +356,42 @@ if n_dim==1:
     ax2 = fig.add_subplot(2,1,2)
     ax2.plot(x_test, np.std(y_stoch_test,axis=-1), label="test std")
     ax2.plot(x_train, np.std(y_stoch_train, axis=-1), label="train std")
+    ax2.set_yscale('log')
     plt.title("Standard deviation")
     plt.legend()
     plt.savefig(os.path.join(pathFigure,"StandardDeviation"))
+    # plt.show()
+
+
+    # #Calibration Curve
+    # y_pred_avg_test = y_pred_avg_test[:,np.newaxis,:]
+    # covs = y_stoch_test - y_pred_avg_test
+    # print(np.shape(y_stoch_test), np.shape(y_pred_avg_test),np.shape(covs))
+    # print(np.transpose(covs).shape, np.moveaxis(covs,2,0).shape)
+    # covs = np.matmul(np.moveaxis(covs,2,0),np.transpose(covs))/(draws-1)
+    # weigths = np.linalg.inv(covs) #
+    # print(np.shape(weigths))
+    # print(np.shape(error_test[:,:,np.newaxis]))
+    # zwischen = np.matmul(weigths, error_test[np.newaxis,:,:]) #Funktioniert nur weil dim=1
+    # nssr = np.matmul(np.transpose(error_test[:,:,np.newaxis]), zwischen)
+    # print("Zwischen \n",zwischen)
+    # print("NSSR \n", nssr)
+    # nssr = nssr.flatten()
+    # nssr = np.sort(nssr)
+    # p_obs = np.linspace(1./nssr.size,1.0,nssr.size)
+    # p_pred = Chi2Dist.cdf(nssr, 9)
+    
+    # plt.figure("Calibration curve for sparse measure model")
+    # plt.plot(p_pred, p_obs, label='Calibration curve')
+    # plt.scatter(p_pred,p_obs, label='Scatter')
+    # plt.plot([0,1],[0,1], 'k--', alpha=0.5, label='Ideal curve')
+    # plt.xlabel('Predicted probability')
+    # plt.ylabel('Observed probability')
+    # plt.axis('equal')
+    # plt.xlim([0,1])
+    # plt.ylim([0,1])
+    # plt.legend()
+    
     plt.show()
 
 else:
