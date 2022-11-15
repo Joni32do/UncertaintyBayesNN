@@ -39,16 +39,16 @@ torch.manual_seed(42)
 #I use no DataLoader
 
 n_dim = 1
-option = 1
+option = 2
 
-n_train = 20
-n_test = 16 #better if it is a square
+n_train = 100
+n_test = 400 #better if it is a square
 
 in_dis = 2 #Assumes symmetric distance and zero centering
-out_dis = 2.5 #in_dis < out_dis
+out_dis = 3 #in_dis < out_dis
 
-aleatoric_train = 0.001 #aleatoric uncertainty
-aleatoric_test = 0.01
+aleatoric_train = 0.01 #aleatoric uncertainty
+aleatoric_test = 0.1
 
 #TODO: If else decision is ugly
 if n_dim == 1:
@@ -118,8 +118,8 @@ else:
 ###### 
 
 
-bayes = False
-n_hidden = 100
+bayes = True
+n_hidden = 10
 
 n_in = x_train.size(dim=1) #0st dim data, 1st dim Dimensions of Vector
 n_out = y_train.size(dim=1)
@@ -131,10 +131,10 @@ y_train.detach().numpy()
 # mu2 = torch.zeros((n_out, n_hidden))
 # sigma2 = torch.ones((n_out, n_hidden))
 mu1 = 0
-sigma1 = 0
+sigma1 = 1
 
 mu2 = 0
-sigma2 = 0
+sigma2 = 1
 #self, prior_mu, prior_sigma, in_features, out_features, bias=True
 
 # What kind of Bayes_Layer
@@ -146,7 +146,7 @@ sigma2 = 0
 
 if bayes:
     model = nn.Sequential(LinearBayes(n_in, n_hidden, mu1, sigma1),
-                        nn.Sigmoid(),
+                        nn.LeakyReLU(),
                         LinearBayes(n_hidden, n_out, mu2, sigma2))
 else:
     model = nn.Sequential(nn.Linear(n_in, n_hidden),
@@ -162,7 +162,7 @@ else:
 ######
 
 
-train_when_exist = False #If model exists already doesn't train it
+train_when_exist = True #If model exists already doesn't train it
 
 
 
@@ -179,10 +179,15 @@ filename = '_'.join([str(n_dim)+'D','O'+str(option),train,'E'+str(epoch),'H'+str
 if not bayes:
     filename = filename + "NB"
 
+####This is bad!
+# train = 'MC'
+#####
+
 pathModel = Path("./simpleReg/models/")
 pathTo = os.path.join(pathModel,filename+'.pth')
 
-if train_when_exist or not os.path.exists(pathTo):
+doTrain = train_when_exist or not os.path.exists(pathTo)
+if doTrain:
 
 
 
@@ -193,7 +198,7 @@ if train_when_exist or not os.path.exists(pathTo):
     if train == 'VI':
         lr = 0.1
         optimizer = torch.optim.Adam(model.parameters(), lr)
-        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
+        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9) #,verbose=True)
 
         for step in range(1,epoch+1):
             #TODO: Implement DataLoader, Batches and Shuffle
@@ -214,12 +219,11 @@ if train_when_exist or not os.path.exists(pathTo):
     ### M  C  M  C  
     #############################
     elif train == 'MC':
-
+        model.load_state_dict(torch.load(pathTo))
         step = 0
         accepted_steps = 0
         step_size = 0.001
         
-        n_steps = 10000
         loss_old = mse_loss(model(x_train),y_train)
         old_state_dict = model.state_dict()
         
@@ -233,15 +237,14 @@ if train_when_exist or not os.path.exists(pathTo):
                 '2.sigma_w',
                 '2.mu_b',
                 '2.sigma_b']
-        
+        print(model.state_dict())
 
-        while step < n_steps:
+        while step < epoch:
             temp_state_dict = model.state_dict()
             for l in layerNames:
                 temp_state_dict[l] = torch.normal(temp_state_dict[l], step_size)
             # print(temp_state_dict)
             model.load_state_dict(temp_state_dict)
-            model.parameters_to_vector
             pred = model(x_train)
             loss_new = mse_loss(pred, y_train)
             acc = loss_old/loss_new
@@ -258,12 +261,7 @@ if train_when_exist or not os.path.exists(pathTo):
 
 
 
-    ### Training Plot
-    plt.loglog(loss_collection)
-    plt.xlabel('Epoch')
-    plt.ylabel('MSE')
-    plt.savefig(os.path.join(pathModel,filename+"loss.svg"))
-
+    
     
     torch.save(model.state_dict(), pathTo)
     # torch.save(loss_collection, pathFolder.joinpath("loss_collection.txt")) .txt doesnt work
@@ -280,15 +278,16 @@ model.eval()
 
 
 #For stochastic Neural Networks - draws 20 times (pointless for non-stochastic NN)
-draws = 20
+draws = 10
 
 y_stoch_test = np.zeros((n_test,n_out,draws))
 y_stoch_train = np.zeros((n_train,n_out,draws))
+
 for i in range(draws):
     y_stoch_test[:,:,i] = model(x_test).detach().numpy().copy()
     y_stoch_train[:,:,i] = model(x_train).detach().numpy().copy()
-y_pred_avg_test = np.mean(y_stoch_test,axis=-1)
 
+y_pred_avg_test = np.mean(y_stoch_test,axis=-1)
 y_pred_avg_train = np.mean(y_stoch_train,axis=-1)
 
 #TODO:
@@ -303,11 +302,24 @@ error_test = np.abs(y_test-y_pred_avg_test)
 # sigma_hat = torch.linalg.inv(s)
 # nssr = torch.matmul()
 
-if n_dim==1:
-    show_examples=5
-    pathFigure = os.path.join(Path("./simpleReg/figures/"),filename)
-    Path(pathFigure).mkdir(parents=True, exist_ok=True)
 
+### P L O T T I N G
+pathFigure = os.path.join(Path("./simpleReg/figures/"),filename)
+Path(pathFigure).mkdir(parents=True, exist_ok=True)
+
+show_examples=int(np.ceil(np.log(draws)))
+
+
+### Training Plot
+if doTrain:
+    plt.loglog(loss_collection)
+    plt.xlabel('Epoch')
+    plt.ylabel('MSE')
+    plt.savefig(os.path.join(pathModel,filename+"loss.svg"))
+
+
+### 1D Plot
+if n_dim==1:
     #Prediction Error
     fig = plt.figure(figsize=(5,5))
     ax = fig.add_subplot(1,1,1)
@@ -315,16 +327,15 @@ if n_dim==1:
     ax.plot(x_test, error_test, label='test error')
     ax.set_yscale('log')
     plt.title("Prediction Error")
-
     plt.legend()
     plt.savefig(os.path.join(pathFigure,"predError.svg"))
 
     #Prediction Curves
     plt.figure(figsize=(5,5))
     plt.plot(x_test, y_test, label="Function with noise")
+    plt.plot(x_test, y_pred_avg_test, label="Average of Predictions")
     for i in range(show_examples):
         plt.plot(x_test, y_stoch_test[:,:,i], label="Prediction "+str(i+1))
-    plt.plot(x_test, y_pred_avg_test, label="Average of Predictions")
     plt.legend()
     plt.title("Prediction Curves")
     plt.savefig(os.path.join(pathFigure,"predictionCurves.svg"))
@@ -333,42 +344,54 @@ if n_dim==1:
     plt.figure(figsize=(5,5))
     for i in range(draws):
         plt.plot(x_test, y_stoch_test[:,:,i] - y_pred_avg_test, label="Deviation from average " + str(i))
-    plt.legend()
+    # plt.legend()
     plt.title("Single Draw Deviation")
     plt.savefig(os.path.join(pathFigure,"Deviation.svg"))
     
-    # #Aleatoric Noise
-    # plt.figure(figsize=(5,5))
-    # #aleatoric*(torch.rand(x.size())-0.5)
-    # plt.scatter(x_test.detach().numpy(),y_test-f(x_test,0,option).detach().numpy(),label='noise test')
-    # plt.scatter(x_train, y_train-f(x_train,0,option),label='noise train')
-    # plt.title("noise")
-    # plt.legend()
-    # plt.savefig(os.path.join(pathFigure,"noise.svg"))
+    #Aleatoric Noise
+    plt.figure(figsize=(5,5))
+    #aleatoric*(torch.rand(x.size())-0.5)
+    plt.scatter(x_test.detach().numpy(),y_test-f(x_test,0,option).detach().numpy(),label='noise test')
+    plt.scatter(x_train, y_train-f(x_train,0,option),label='noise train')
+    plt.title("noise")
+    plt.legend()
+    plt.savefig(os.path.join(pathFigure,"noise.svg"))
 
-    #Variance
+    #Sigma last layer
     fig = plt.figure(figsize=(5,5))
-    ax1 = fig.add_subplot(2,1,1)
+    ax1 = fig.add_subplot(1,1,1)
     params = [param for param in model.parameters()]
-    weight_mu_last_layer = params[-4].detach().numpy()
-    ax1.hist(weight_mu_last_layer)
+    weight_sigma_last_layer = params[-3].detach().numpy()
+    ax1.hist(np.exp(weight_sigma_last_layer), bins=4)
+    # ax1.set_xscale('log')
     plt.title("Histogram of sigma of last layer")
-    ax2 = fig.add_subplot(2,1,2)
+    plt.savefig(os.path.join(pathFigure,"SigmaHistogram.svg"))
+    
+    #Std on x
+    fig = plt.figure(figsize=(5,5))
+    ax2 = fig.add_subplot(1,1,1)
     ax2.plot(x_test, np.std(y_stoch_test,axis=-1), label="test std")
     ax2.plot(x_train, np.std(y_stoch_train, axis=-1), label="train std")
     ax2.set_yscale('log')
     plt.title("Standard deviation")
     plt.legend()
-    plt.savefig(os.path.join(pathFigure,"StandardDeviation"))
+    plt.savefig(os.path.join(pathFigure,"StandardDeviation.svg"))
     # plt.show()
 
 
     # #Calibration Curve
-    # y_pred_avg_test = y_pred_avg_test[:,np.newaxis,:]
-    # covs = y_stoch_test - y_pred_avg_test
-    # print(np.shape(y_stoch_test), np.shape(y_pred_avg_test),np.shape(covs))
-    # print(np.transpose(covs).shape, np.moveaxis(covs,2,0).shape)
-    # covs = np.matmul(np.moveaxis(covs,2,0),np.transpose(covs))/(draws-1)
+    y_pred_avg_test = y_pred_avg_test[:,np.newaxis,:]
+    print(y_stoch_test[0:4,:,1])
+    print("Average \n", y_pred_avg_test[0:4,:])
+    covs = y_stoch_test - y_pred_avg_test
+    print(np.shape(y_stoch_test), np.shape(y_pred_avg_test),np.shape(covs))
+    print(np.transpose(covs).shape, np.moveaxis(covs,2,0).shape)
+    print(covs[0:4,:,:])
+    covs = np.matmul(np.moveaxis(covs,2,0),np.transpose(covs))/(draws-1)
+    print(covs[0:4,:,:])
+    covs = covs.sum(axis=0)
+    print(covs)
+    print(np.linalg.det(covs))
     # weigths = np.linalg.inv(covs) #
     # print(np.shape(weigths))
     # print(np.shape(error_test[:,:,np.newaxis]))
@@ -392,8 +415,9 @@ if n_dim==1:
     # plt.ylim([0,1])
     # plt.legend()
     
-    plt.show()
+    # plt.show()
 
+### 2D - Plot
 else:
   
     #TODO: Devide Square_Grid and Random data more clearly 
@@ -434,8 +458,12 @@ else:
 
 params = [param for param in model.parameters()]
 weight_mu_last_layer = params[-4].detach().numpy()
+weight_sigma_last_layer = params[-3].detach().numpy()
 print(weight_mu_last_layer)
-print(model.parameters())
+print(weight_sigma_last_layer)
+print(params[-2].detach().numpy())
+print(params[-1].detach().numpy())
+
 '''print(model.state_dict())
 model.state_dict["2.sigma_b"] = torch.rand((1,1)) 
 print(model.state_dict())'''
