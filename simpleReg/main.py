@@ -10,7 +10,7 @@ import datetime
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
-from scipy.stats import chi2 as Chi2Dist
+from scipy.stats import chi2
 
 import torch
 import torch.nn as nn
@@ -23,11 +23,65 @@ from bnnLayer import *
 
 
 ##################################################################################################################
-# Uncertainty
+# Settings
 #######
 torch.manual_seed(42)
 
 
+
+
+## Architecture
+
+bayes = True
+pretrain = False
+n_hidden = 20
+
+#Initial Value
+mu1 = 0
+sigma1 = 1
+mu2 = 0
+sigma2 = 1
+
+
+
+## Hyperparameters
+epoch = 10000
+loss_fun = nn.MSELoss()
+lr = 0.1
+train = "VI" #"MCMC" #Or 'VI'
+
+
+
+## Dataset
+
+n_dim = 1
+option = 0
+
+n_train = 100
+n_test = 400 #better if it is a square
+
+in_dis = 2 #Assumes symmetric distance and zero centering
+out_dis = 2.5 #in_dis < out_dis
+
+aleatoric_train = 0.01 #aleatoric uncertainty
+aleatoric_test = 0.1
+
+
+
+
+
+## File management
+train_even_when_exist = True #If model exists already doesn't train it
+
+filename = '_'.join([str(n_dim)+'D','O'+str(option),train,'E'+str(epoch),'H'+str(n_hidden),'T'+str(n_train)])
+if bayes:
+    filename = filename + "B"
+if pretrain:
+    filename = filename + "P"
+
+
+pathModel = Path("./simpleReg/models/")
+pathTo = os.path.join(pathModel,filename+'.pth')
 
 
 
@@ -38,19 +92,6 @@ torch.manual_seed(42)
 
 #I use no DataLoader
 
-n_dim = 1
-option = 2
-
-n_train = 100
-n_test = 400 #better if it is a square
-
-in_dis = 2 #Assumes symmetric distance and zero centering
-out_dis = 3 #in_dis < out_dis
-
-aleatoric_train = 0.01 #aleatoric uncertainty
-aleatoric_test = 0.1
-
-#TODO: If else decision is ugly
 if n_dim == 1:
 
     ### 1D Regression Dataset
@@ -59,8 +100,9 @@ if n_dim == 1:
 
     def f(x,aleatoric=0,option=0):
         '''
-        cubic polynomial R1 -> R1
-
+        4th degree polynomial R1 -> R1
+        sinc
+        4th degree
         '''
         unc = aleatoric*(torch.rand(x.size())-0.5)
         if option == 0:
@@ -79,15 +121,16 @@ if n_dim == 1:
 
     x_test = torch.reshape(torch.linspace(-out_dis,out_dis,n_test),(n_test,1))
     y_test = f(x_test,aleatoric_test,option).detach().numpy()
+
 else:
     ### 2D Regression Dataset
 
 
     def f_2D(X,Y=None,aleatoric=0):
         if Y is not None:
-            return torch.sin(torch.sqrt(X**2 + Y **2)) + aleatoric*(torch.rand(X.size())-0.5)
+            return -torch.sin(torch.sqrt(X**2 + Y **2)) + aleatoric*(torch.rand(X.size())-0.5)
         else:
-            return torch.sin(torch.sqrt(X[:,0]**2 + X[:,1]**2)) + aleatoric*(torch.rand(X.size()[0])-0.5)
+            return -torch.sin(torch.sqrt(X[:,0]**2 + X[:,1]**2)) + aleatoric*(torch.rand(X.size()[0])-0.5)
 
 
     # Train
@@ -118,9 +161,6 @@ else:
 ###### 
 
 
-bayes = True
-n_hidden = 10
-
 n_in = x_train.size(dim=1) #0st dim data, 1st dim Dimensions of Vector
 n_out = y_train.size(dim=1)
 y_train.detach().numpy()
@@ -130,29 +170,42 @@ y_train.detach().numpy()
 
 # mu2 = torch.zeros((n_out, n_hidden))
 # sigma2 = torch.ones((n_out, n_hidden))
-mu1 = 0
-sigma1 = 1
-
-mu2 = 0
-sigma2 = 1
-#self, prior_mu, prior_sigma, in_features, out_features, bias=True
-
-# What kind of Bayes_Layer
-# finn: Bayes_Layer
-# bnnG: BayesLinear
-# mine: LinearBayes
-# tuto: MeanFieldGaussianFeedForward
 
 
-if bayes:
-    model = nn.Sequential(LinearBayes(n_in, n_hidden, mu1, sigma1),
-                        nn.LeakyReLU(),
-                        LinearBayes(n_hidden, n_out, mu2, sigma2))
-else:
+
+
+if pretrain or not bayes:
     model = nn.Sequential(nn.Linear(n_in, n_hidden),
                         nn.Sigmoid(),
                         nn.Linear(n_hidden,n_out))
+    optimizer = torch.optim.SGD(model.parameters(), lr, momentum=0.9)
+    for step in range(10000):
+            pred = model(x_train)
+            loss = loss_fun(pred, y_train)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            if step+1 % 10 == 0:
+                print("\r",(f'\r Pretraining: Epoch {step+1}: Loss: {loss.item()}'),end="")
+    params = [param for param in model.parameters()]
+    nn_model = model
+    
+        
+print()   
 
+if bayes:
+    if pretrain:
+        model = nn.Sequential(LinearBayes(n_in, n_hidden, mu_w_init=params[0].detach(),sigma_w_init=sigma1,
+                                            mu_b_init=params[1].detach(),sigma_b_init=sigma1),
+                        nn.Sigmoid(),
+                        LinearBayes(n_hidden, n_out, mu_w_init=params[2].detach(),sigma_w_init=sigma2,
+                                            mu_b_init=params[3].detach(),sigma_b_init=sigma2))
+    else:
+        model = nn.Sequential(LinearBayes(n_in, n_hidden, mu_w_init=mu1,sigma_w_init=sigma1,
+                                            mu_b_init=mu1,sigma_b_init=sigma1),
+                        nn.Sigmoid(),
+                        LinearBayes(n_hidden, n_out, mu_w_init=mu2,sigma_w_init=sigma2,
+                                            mu_b_init=mu2,sigma_b_init=sigma2))
 
 
 
@@ -162,112 +215,95 @@ else:
 ######
 
 
-train_when_exist = True #If model exists already doesn't train it
 
 
 
-## Hyperparameters
-epoch = 10000
-mse_loss = nn.MSELoss()
-loss_collection = []
-# train = "MCMC" #Or 'VI'
-train = "VI"
 
-# filename = "E10e6H200Lre-3.pth"
-# filename = "bayes_TutoE10e4H20Lr10e-2Sigmoid.pth"
-filename = '_'.join([str(n_dim)+'D','O'+str(option),train,'E'+str(epoch),'H'+str(n_hidden),'T'+str(n_train)])
-if not bayes:
-    filename = filename + "NB"
+doTrain = train_even_when_exist or not os.path.exists(pathTo)
+if bayes:
+    if doTrain:
 
-####This is bad!
-# train = 'MC'
-#####
+        loss_collection = []
+        
+        #############################
+        ### V A R I A T I O N A L
+        ###    I N F E R E N C E
+        #############################
+        if train == 'VI':
+            #Code double - Unfortunately I don't have time for this
+            # optimizer = torch.optim.SGD(model.parameters(), lr, momentum=0.9)
+            optimizer = torch.optim.Adam(model.parameters(),lr)
+            # scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9) #,verbose=True)
 
-pathModel = Path("./simpleReg/models/")
-pathTo = os.path.join(pathModel,filename+'.pth')
-
-doTrain = train_when_exist or not os.path.exists(pathTo)
-if doTrain:
-
-
-
-    #############################
-    ### V A R I A T I O N A L
-    ###    I N F E R E N C E
-    #############################
-    if train == 'VI':
-        lr = 0.1
-        optimizer = torch.optim.Adam(model.parameters(), lr)
-        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9) #,verbose=True)
-
-        for step in range(1,epoch+1):
-            #TODO: Implement DataLoader, Batches and Shuffle
-            pred = model(x_train)
-            loss = mse_loss(pred, y_train)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            if step % 100 == 0:
-                print("\r",(f'\r Epoch {step}: Loss: {loss.item()}'),end="")
-                loss_collection.append(loss.item())
-                scheduler.step()
+            for step in range(epoch):
+                #TODO: Implement DataLoader, Batches and Shuffle
+                pred = model(x_train)
+                loss = loss_fun(pred, y_train)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                if step % 1 == 0:
+                    print("\r",(f'\r Epoch {step+1}: Loss: {loss.item()}'),end="")
+                    loss_collection.append(loss.item())
+                    # scheduler.step()
 
 
-    
+        
 
-    #############################
-    ### M  C  M  C  
-    #############################
-    elif train == 'MC':
+        #############################
+        ### M  C  M  C  
+        #############################
+        elif train == 'MC':
+            model.load_state_dict(torch.load(pathTo))
+            step = 0
+            accepted_steps = 0
+            step_size = lr
+            
+            loss_old = loss_fun(model(x_train),y_train)
+            old_state_dict = model.state_dict()
+            
+            # temp_model = deepcopy(model)
+            #This 
+            layerNames = ['0.mu_w',
+                    '0.sigma_w',
+                    '0.mu_b',
+                    '0.sigma_b',
+                    '2.mu_w',
+                    '2.sigma_w',
+                    '2.mu_b',
+                    '2.sigma_b']
+            print(model.state_dict())
+
+            while step < epoch:
+                temp_state_dict = model.state_dict()
+                for l in layerNames:
+                    temp_state_dict[l] = torch.normal(temp_state_dict[l], step_size)
+                # print(temp_state_dict)
+                model.load_state_dict(temp_state_dict)
+                pred = model(x_train)
+                loss_new = loss_fun(pred, y_train)
+                acc = loss_old/loss_new
+                if acc >= np.random.uniform(0,1):
+                    loss_old = loss_new
+                    loss_collection.append(loss_new.detach().numpy())
+                    old_state_dict = temp_state_dict
+                    accepted_steps += 1
+                else:
+                    model.load_state_dict(old_state_dict)
+                step += 1
+                print(step)
+            print(accepted_steps/step)
+
+
+
+        
+        
+        torch.save(model.state_dict(), pathTo)
+        # torch.save(loss_collection, pathFolder.joinpath("loss_collection.txt")) .txt doesnt work
+
+    else:
         model.load_state_dict(torch.load(pathTo))
-        step = 0
-        accepted_steps = 0
-        step_size = 0.001
-        
-        loss_old = mse_loss(model(x_train),y_train)
-        old_state_dict = model.state_dict()
-        
-        # temp_model = deepcopy(model)
-        #This 
-        layerNames = ['0.mu_w',
-                '0.sigma_w',
-                '0.mu_b',
-                '0.sigma_b',
-                '2.mu_w',
-                '2.sigma_w',
-                '2.mu_b',
-                '2.sigma_b']
-        print(model.state_dict())
 
-        while step < epoch:
-            temp_state_dict = model.state_dict()
-            for l in layerNames:
-                temp_state_dict[l] = torch.normal(temp_state_dict[l], step_size)
-            # print(temp_state_dict)
-            model.load_state_dict(temp_state_dict)
-            pred = model(x_train)
-            loss_new = mse_loss(pred, y_train)
-            acc = loss_old/loss_new
-            if acc >= np.random.uniform(0,1):
-                loss_old = loss_new
-                loss_collection.append(loss_new.detach().numpy())
-                old_state_dict = temp_state_dict
-                accepted_steps += 1
-            else:
-                model.load_state_dict(old_state_dict)
-            step += 1
-            print(step)
-        print(accepted_steps/step)
-
-
-
-    
-    
-    torch.save(model.state_dict(), pathTo)
-    # torch.save(loss_collection, pathFolder.joinpath("loss_collection.txt")) .txt doesnt work
-
-else:
-    model.load_state_dict(torch.load(pathTo))
 
 
 ##################################################################################################################
@@ -311,8 +347,11 @@ show_examples=int(np.ceil(np.log(draws)))
 
 
 ### Training Plot
-if doTrain:
-    plt.loglog(loss_collection)
+if bayes and doTrain:
+    fig = plt.figure()
+    ax = fig.add_subplot(1,1,1)
+    ax.plot(loss_collection)
+    ax.set_yscale('log')
     plt.xlabel('Epoch')
     plt.ylabel('MSE')
     plt.savefig(os.path.join(pathModel,filename+"loss.svg"))
@@ -334,8 +373,9 @@ if n_dim==1:
     plt.figure(figsize=(5,5))
     plt.plot(x_test, y_test, label="Function with noise")
     plt.plot(x_test, y_pred_avg_test, label="Average of Predictions")
-    for i in range(show_examples):
-        plt.plot(x_test, y_stoch_test[:,:,i], label="Prediction "+str(i+1))
+    if bayes:
+        for i in range(show_examples):
+            plt.plot(x_test, y_stoch_test[:,:,i], label="Prediction "+str(i+1))
     plt.legend()
     plt.title("Prediction Curves")
     plt.savefig(os.path.join(pathFigure,"predictionCurves.svg"))
@@ -345,7 +385,7 @@ if n_dim==1:
     for i in range(draws):
         plt.plot(x_test, y_stoch_test[:,:,i] - y_pred_avg_test, label="Deviation from average " + str(i))
     # plt.legend()
-    plt.title("Single Draw Deviation")
+    plt.title("Deviation from average for single draw")
     plt.savefig(os.path.join(pathFigure,"Deviation.svg"))
     
     #Aleatoric Noise
@@ -369,53 +409,40 @@ if n_dim==1:
     
     #Std on x
     fig = plt.figure(figsize=(5,5))
+    std_test = np.std(y_stoch_test,axis=-1)
+    std_train = np.std(y_stoch_train, axis=-1)
     ax2 = fig.add_subplot(1,1,1)
-    ax2.plot(x_test, np.std(y_stoch_test,axis=-1), label="test std")
-    ax2.plot(x_train, np.std(y_stoch_train, axis=-1), label="train std")
+    ax2.plot(x_test, std_test, label="test std")
+    ax2.plot(x_train, std_train, label="train std")
     ax2.set_yscale('log')
-    plt.title("Standard deviation")
     plt.legend()
+    plt.title("Standard deviation")
     plt.savefig(os.path.join(pathFigure,"StandardDeviation.svg"))
     # plt.show()
 
 
     # #Calibration Curve
-    y_pred_avg_test = y_pred_avg_test[:,np.newaxis,:]
-    print(y_stoch_test[0:4,:,1])
-    print("Average \n", y_pred_avg_test[0:4,:])
-    covs = y_stoch_test - y_pred_avg_test
-    print(np.shape(y_stoch_test), np.shape(y_pred_avg_test),np.shape(covs))
-    print(np.transpose(covs).shape, np.moveaxis(covs,2,0).shape)
-    print(covs[0:4,:,:])
-    covs = np.matmul(np.moveaxis(covs,2,0),np.transpose(covs))/(draws-1)
-    print(covs[0:4,:,:])
-    covs = covs.sum(axis=0)
-    print(covs)
-    print(np.linalg.det(covs))
-    # weigths = np.linalg.inv(covs) #
-    # print(np.shape(weigths))
-    # print(np.shape(error_test[:,:,np.newaxis]))
-    # zwischen = np.matmul(weigths, error_test[np.newaxis,:,:]) #Funktioniert nur weil dim=1
-    # nssr = np.matmul(np.transpose(error_test[:,:,np.newaxis]), zwischen)
-    # print("Zwischen \n",zwischen)
-    # print("NSSR \n", nssr)
-    # nssr = nssr.flatten()
-    # nssr = np.sort(nssr)
-    # p_obs = np.linspace(1./nssr.size,1.0,nssr.size)
-    # p_pred = Chi2Dist.cdf(nssr, 9)
+    print(np.shape(std_test), np.shape(error_test))
+    nssr = np.multiply(1/std_test, np.power(error_test,2))
+    print
+    nssr = np.sort(nssr,axis=None)
+    print(nssr)
+    p_obs = np.linspace(1/n_test,1,n_test)
+    print(np.shape(nssr), np.shape(p_obs))
+    p_pred = chi2.cdf(nssr,1)
     
-    # plt.figure("Calibration curve for sparse measure model")
-    # plt.plot(p_pred, p_obs, label='Calibration curve')
-    # plt.scatter(p_pred,p_obs, label='Scatter')
-    # plt.plot([0,1],[0,1], 'k--', alpha=0.5, label='Ideal curve')
-    # plt.xlabel('Predicted probability')
-    # plt.ylabel('Observed probability')
-    # plt.axis('equal')
-    # plt.xlim([0,1])
-    # plt.ylim([0,1])
-    # plt.legend()
-    
-    # plt.show()
+    plt.figure("Calibration curve for sparse measure model")
+    plt.plot(p_pred, p_obs, c='#ff7f0e', label='Calibration curve')
+    # plt.scatter(p_pred,p_obs,s=2,c='#ff7f0e', label='points')
+    plt.plot([0,1],[0,1], 'k--', alpha=0.5, label='Ideal curve')
+    plt.xlabel('Predicted probability')
+    plt.ylabel('Observed probability')
+    plt.title("Calibration curve")
+    plt.axis('equal')
+    plt.xlim([0,1])
+    plt.ylim([0,1])
+    plt.legend()
+    plt.savefig(os.path.join(pathFigure,'CalibrationCurve.svg'))
 
 ### 2D - Plot
 else:
@@ -425,25 +452,43 @@ else:
     X12[:,0] = torch.flatten(X1)
     X12[:,1] = torch.flatten(X2)
     z_pred = model(X12)
+    # z_pred = nn_model(X12)
     z_grid = torch.reshape(z_pred,(n_test_dim,n_test_dim)).detach().numpy()
     error_pred = np.abs(z_grid - Z.numpy())
 
-    # First Plot
-    fig = plt.figure(figsize=plt.figaspect(0.5)) #Plots a figure 2:1
-    ax = fig.add_subplot(1,2,1,projection="3d")
+    # Function
+    fig = plt.figure(figsize=(5,5)) #Plots a figure 2:1
+    ax = fig.add_subplot(1,1,1,projection="3d")
     surf = ax.plot_surface(X1,X2,Z, cmap=cm.summer, linewidth=0, alpha = 0.7, label='function')
-    scatter_z = ax.scatter(X12[:,0],X12[:,1],z_pred.detach().numpy(), label='prediction')
-    surf_error = ax.plot_surface(X1,X2, error_pred, cmap=cm.Reds, linewidth=0, alpha = 0.7, label='error')
-    fig.colorbar(surf, shrink=0.5, aspect=5)
-    # ax.legend(handles=[surf, scatter_z, surf_error])
+    plt.savefig(os.path.join(pathFigure,"Function.svg"))
+
+    # Prediction
+    fig = plt.figure(figsize=(5,5)) #Plots a figure 2:1
+    ax = fig.add_subplot(1,1,1,projection="3d")
+    scatter_z = ax.plot_surface(X1,X2,np.reshape(z_pred.detach().numpy(),np.shape(X1)), label='prediction')
+    plt.savefig(os.path.join(pathFigure,"Prediction.svg"))
+    
+
+    # Error
+    fig = plt.figure(figsize=(5,5)) #Plots a figure 2:1
+    ax = fig.add_subplot(1,1,1,projection="3d")
+    surf_error = ax.plot_surface(X1,X2, error_pred, linewidth=0, cmap=cm.Reds, alpha = 0.7, label='error') #
+    plt.savefig(os.path.join(pathFigure,"Error.svg"))
+    # 
+   
+    
+    ###### fig.colorbar(surf, shrink=0.5, aspect=5)
+    # # ax.legend(handles=[surf, scatter_z, surf_error])
+    plt.savefig(os.path.join(pathFigure,"Error.svg"))
     
  
-    #Second Plot
-    ax1 = fig.add_subplot(1,2,2,projection='3d')
-    scatter_train = ax1.scatter(x_train[:,0],x_train[:,1], y_train, marker='o', label='train_data')
-    scatter_test = ax1.scatter(x_test[:,0], x_test[:,1], y_test, marker = '^', label='test_data')
-    scatter_pred = ax1.scatter(x_test[:,0], x_test[:,1], y_stoch_test[:,:,0], marker = 'o',label='prediction')
-    # ax1.legend(handles=[scatter_train,scatter_test,scatter_pred])
+    # #Second Plot
+    # fig = plt.figure(figsize=(5,5))
+    # ax1 = fig.add_subplot(1,2,2,projection='3d')
+    # scatter_train = ax1.scatter(x_train[:,0],x_train[:,1], y_train, marker='o', label='train_data')
+    # scatter_test = ax1.scatter(x_test[:,0], x_test[:,1], y_test, marker = '^', label='test_data')
+    # scatter_pred = ax1.scatter(x_test[:,0], x_test[:,1], y_stoch_test[:,:,0], marker = 'o',label='prediction')
+    # # ax1.legend(handles=[scatter_train,scatter_test,scatter_pred])
     
     plt.show()
 

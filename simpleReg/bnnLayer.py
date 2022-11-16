@@ -295,21 +295,31 @@ class MeanFieldGaussianFeedForward(VIModule) :
 class LinearBayes(nn.Module):
     """
     Implementation of a linear layer with Bayesian weights.
-
-    At the moment the initial mu and sigma are scalar and for both weights and bias
+    Only accepts matrices with fitting dimensions or scalar values
 
     TODO: Add bias
     """
-    def __init__(self, n_in, n_out, mu_init=0, sigma_init=1):
+    def __init__(self, n_in, n_out, mu_w_init=0,sigma_w_init=1, mu_b_init=0, sigma_b_init=1):
         super(LinearBayes, self).__init__()
+        if not torch.is_tensor(mu_w_init):
+            mu_w_init = mu_w_init + torch.rand(n_out, n_in) - 0.5
+        if not torch.is_tensor(sigma_w_init):
+            sigma_w_init = torch.log(sigma_w_init*torch.ones(n_out,n_in))
+        if  not torch.is_tensor(mu_b_init):
+            mu_b_init = mu_b_init + torch.rand(n_out,1)
+        else:
+            mu_b_init = torch.reshape(mu_b_init,(n_out,1))
+        if not torch.is_tensor(sigma_b_init):
+            sigma_b_init = torch.log(sigma_b_init*torch.ones(n_out,1))
+
         #Weights
-        self.mu_w = nn.Parameter(torch.rand(n_out, n_in) - 0.5)
-        self.sigma_w = nn.Parameter(torch.log(sigma_init*torch.ones(n_out,n_in)))
+        self.mu_w = nn.Parameter(mu_w_init)
+        self.sigma_w = nn.Parameter(sigma_w_init)
         self.eps_w = dist.normal.Normal(torch.zeros(n_out,n_in), torch.ones(n_out,n_in))
-        #Bias
         
-        self.mu_b = nn.Parameter(torch.rand(n_out,1) - 0.5)
-        self.sigma_b = nn.Parameter(torch.log(sigma_init*torch.ones(n_out,1)))
+        #Bias
+        self.mu_b = nn.Parameter(mu_b_init)
+        self.sigma_b = nn.Parameter(sigma_b_init)
         self.eps_b = dist.normal.Normal(torch.zeros(n_out,1), torch.ones(n_out,1))
 
         self.weights = None #One could also init with something
@@ -318,11 +328,10 @@ class LinearBayes(nn.Module):
     def sample(self, stochastic=True):
         self.weights = self.mu_w + (torch.exp(self.sigma_w) * self.eps_w.sample() if stochastic else 0)
         self.bias = self.mu_b + (torch.exp(self.sigma_b)*self.eps_b.sample() if stochastic else 0)
-        # print("Gewichte\n",self.weights,"\nBias\n",self.bias)
+
     
     def forward(self, x):
         self.sample()
-        # print("SIzeBWX",self.bias.size(),self.weights.size(),x.size())
         return F.linear(x, self.weights, torch.t(self.bias))
 
 
