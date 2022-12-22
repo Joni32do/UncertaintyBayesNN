@@ -44,7 +44,7 @@ sigma2 = 1
 
 
 ## Hyperparameters
-epoch = 1000
+epoch = 10000
 loss_fun = nn.MSELoss()
 lr = 0.01
 train = "VI" #"MCMC" #Or 'VI'
@@ -392,18 +392,21 @@ if n_dim==1:
     plt.savefig(os.path.join(pathFigure,"functionWithData.svg"))
 
     #Prediction Curves
-    plt.figure(figsize=(8,5))
-    axP = fig.add_subplot(1,1,1)
-    axP.fill_between(x_test.detach().numpy().flatten(), 
+    fig = plt.figure(figsize=(8,5))
+    ax = fig.add_subplot(1,1,1)
+    ax.fill_between(x_test.detach().numpy().flatten(), 
         f(x_test,0,option).detach().numpy().flatten() + 2* aleatoric_test, 
         f(x_test,0,option).detach().numpy().flatten() - 2* aleatoric_test, 
         alpha = 0.9, linewidth = 0,color = 'lightsteelblue')
-    axP.plot(x_test, y_pred_avg_test, label="Average of Predictions")
+    ax.plot(x_test,f(x_test,0,option), color = 'tab:blue')
     if bayes:
         for i in range(show_examples):
-            axP.plot(x_test, y_stoch_test[:,:,i], label="Prediction "+str(i+1))
+            ax.plot(x_test, y_stoch_test[:,:,i], label="Prediction "+str(i+1))
+    ax.plot(x_test, y_pred_avg_test, label="Average of Predictions")
     plt.legend()
     plt.title("Prediction Curves")
+    plt.xlim(-0.2,2.1)
+    plt.ylim(-0.5,3.5)
     plt.savefig(os.path.join(pathFigure,"predictionCurves.svg"))
 
 
