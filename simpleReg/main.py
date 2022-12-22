@@ -21,7 +21,6 @@ from bnnLayer import *
 
 
 
-
 ##################################################################################################################
 # Settings
 #######
@@ -34,7 +33,7 @@ torch.manual_seed(42)
 
 bayes = True
 pretrain = False
-n_hidden = 20
+n_hidden = 6
 
 #Initial Value
 mu1 = 0
@@ -45,9 +44,9 @@ sigma2 = 1
 
 
 ## Hyperparameters
-epoch = 10000
+epoch = 1000
 loss_fun = nn.MSELoss()
-lr = 0.1
+lr = 0.01
 train = "VI" #"MCMC" #Or 'VI'
 
 
@@ -55,16 +54,25 @@ train = "VI" #"MCMC" #Or 'VI'
 ## Dataset
 
 n_dim = 1
-option = 0
+option = 3
 
 n_train = 100
-n_test = 400 #better if it is a square
+n_test = 1000 #better if it is a square
+
+
 
 in_dis = 2 #Assumes symmetric distance and zero centering
 out_dis = 2.5 #in_dis < out_dis
 
-aleatoric_train = 0.01 #aleatoric uncertainty
-aleatoric_test = 0.1
+in_dis_l = 0
+in_dis_r = 2
+out_dis_l = -0.5
+out_dis_r = 2.5
+
+
+
+aleatoric_train = 0.2 #aleatoric uncertainty
+aleatoric_test = 0.2
 
 
 
@@ -104,22 +112,24 @@ if n_dim == 1:
         sinc
         4th degree
         '''
-        unc = aleatoric*(torch.rand(x.size())-0.5)
+        unc = aleatoric*torch.randn(x.size())
         if option == 0:
             return torch.pow(x,4) - torch.pow(x,2) + 5 * torch.pow(x,1) + unc
         elif option == 1:
             return torch.sin(2*torch.pi *x)/x + unc
         elif option == 2:
             return torch.pow(x,4) - 3*torch.pow(x,2) + 1 + unc
+        elif option == 3:
+            return -2 * torch.pow(x,3) + 4.5 * torch.pow(x,2) - 0.3 * torch.pow(x,1) + unc
         else:
             return torch.zeros(x.size())
         
 
 
-    x_train = torch.reshape(torch.linspace(-in_dis,in_dis,n_train),(n_train,1))
+    x_train = torch.reshape(torch.linspace(in_dis_l,in_dis_r,n_train),(n_train,1))
     y_train = f(x_train,aleatoric_train,option)
 
-    x_test = torch.reshape(torch.linspace(-out_dis,out_dis,n_test),(n_test,1))
+    x_test = torch.reshape(torch.linspace(out_dis_l,out_dis_r,n_test),(n_test,1))
     y_test = f(x_test,aleatoric_test,option).detach().numpy()
 
 else:
@@ -172,6 +182,7 @@ y_train.detach().numpy()
 # sigma2 = torch.ones((n_out, n_hidden))
 
 
+preTrainingEpoch = 10000
 
 
 if pretrain or not bayes:
@@ -179,7 +190,7 @@ if pretrain or not bayes:
                         nn.Sigmoid(),
                         nn.Linear(n_hidden,n_out))
     optimizer = torch.optim.SGD(model.parameters(), lr, momentum=0.9)
-    for step in range(10000):
+    for step in range(preTrainingEpoch):
             pred = model(x_train)
             loss = loss_fun(pred, y_train)
             optimizer.zero_grad()
@@ -313,7 +324,7 @@ if bayes:
 model.eval()
 
 
-#For stochastic Neural Networks - draws 20 times (pointless for non-stochastic NN)
+#For stochastic Neural Networks - draws 10 times (pointless for non-stochastic NN)
 draws = 10
 
 y_stoch_test = np.zeros((n_test,n_out,draws))
@@ -343,7 +354,14 @@ error_test = np.abs(y_test-y_pred_avg_test)
 pathFigure = os.path.join(Path("./simpleReg/figures/"),filename)
 Path(pathFigure).mkdir(parents=True, exist_ok=True)
 
+
+plt.style.use('ggplot')
+
+
 show_examples=int(np.ceil(np.log(draws)))
+
+
+
 
 
 ### Training Plot
@@ -359,6 +377,36 @@ if bayes and doTrain:
 
 ### 1D Plot
 if n_dim==1:
+    #Plot function with data and margins
+    fig = plt.figure(figsize=(8,5))
+    axF = fig.add_subplot(1,1,1)
+    axF.fill_between(x_test.detach().numpy().flatten(), 
+        f(x_test,0,option).detach().numpy().flatten() + 2* aleatoric_test, 
+        f(x_test,0,option).detach().numpy().flatten() - 2* aleatoric_test, 
+        alpha = 0.9, linewidth = 0,color = 'lightsteelblue')
+    axF.plot(x_test,f(x_test,0,option), color = 'tab:blue')
+    axF.scatter(x_test, y_test, s = 1, c = 'tab:orange')
+    axF.scatter(x_train, y_train, s = 8, c = 'tab:red')
+    plt.xlim(-0.2,2.1)
+    plt.ylim(-0.5,3.5)
+    plt.savefig(os.path.join(pathFigure,"functionWithData.svg"))
+
+    #Prediction Curves
+    plt.figure(figsize=(8,5))
+    axP = fig.add_subplot(1,1,1)
+    axP.fill_between(x_test.detach().numpy().flatten(), 
+        f(x_test,0,option).detach().numpy().flatten() + 2* aleatoric_test, 
+        f(x_test,0,option).detach().numpy().flatten() - 2* aleatoric_test, 
+        alpha = 0.9, linewidth = 0,color = 'lightsteelblue')
+    axP.plot(x_test, y_pred_avg_test, label="Average of Predictions")
+    if bayes:
+        for i in range(show_examples):
+            axP.plot(x_test, y_stoch_test[:,:,i], label="Prediction "+str(i+1))
+    plt.legend()
+    plt.title("Prediction Curves")
+    plt.savefig(os.path.join(pathFigure,"predictionCurves.svg"))
+
+
     #Prediction Error
     fig = plt.figure(figsize=(5,5))
     ax = fig.add_subplot(1,1,1)
@@ -369,17 +417,6 @@ if n_dim==1:
     plt.legend()
     plt.savefig(os.path.join(pathFigure,"predError.svg"))
 
-    #Prediction Curves
-    plt.figure(figsize=(5,5))
-    plt.plot(x_test, y_test, label="Function with noise")
-    plt.plot(x_test, y_pred_avg_test, label="Average of Predictions")
-    if bayes:
-        for i in range(show_examples):
-            plt.plot(x_test, y_stoch_test[:,:,i], label="Prediction "+str(i+1))
-    plt.legend()
-    plt.title("Prediction Curves")
-    plt.savefig(os.path.join(pathFigure,"predictionCurves.svg"))
-
     #Deviation of Prediction Curves
     plt.figure(figsize=(5,5))
     for i in range(draws):
@@ -388,14 +425,14 @@ if n_dim==1:
     plt.title("Deviation from average for single draw")
     plt.savefig(os.path.join(pathFigure,"Deviation.svg"))
     
-    #Aleatoric Noise
-    plt.figure(figsize=(5,5))
-    #aleatoric*(torch.rand(x.size())-0.5)
-    plt.scatter(x_test.detach().numpy(),y_test-f(x_test,0,option).detach().numpy(),label='noise test')
-    plt.scatter(x_train, y_train-f(x_train,0,option),label='noise train')
-    plt.title("noise")
-    plt.legend()
-    plt.savefig(os.path.join(pathFigure,"noise.svg"))
+    # #Aleatoric Noise
+    # plt.figure(figsize=(5,5))
+    # #aleatoric*(torch.rand(x.size())-0.5)
+    # plt.scatter(x_test.detach().numpy(),y_test-f(x_test,0,option).detach().numpy(),label='noise test')
+    # plt.scatter(x_train, y_train-f(x_train,0,option),label='noise train')
+    # plt.title("noise")
+    # plt.legend()
+    # plt.savefig(os.path.join(pathFigure,"noise.svg"))
 
     #Sigma last layer
     fig = plt.figure(figsize=(5,5))
@@ -419,6 +456,15 @@ if n_dim==1:
     plt.title("Standard deviation")
     plt.savefig(os.path.join(pathFigure,"StandardDeviation.svg"))
     # plt.show()
+
+    #Function with margins and data points
+    std_test = np.std(y_stoch_test,axis=-1)
+    ax2 = fig.add_subplot(1,1,1)
+    ax2.plot(x_test, std_test, label="test std")
+    ax2.set_yscale('log')
+    plt.legend()
+    plt.title("Uncertainty Quantification with m")
+    plt.savefig(os.path.join(pathFigure,"MarginAndData.svg"))
 
 
     # #Calibration Curve
