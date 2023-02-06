@@ -1,0 +1,2 @@
+T103 Overfitting - Margin sind nur am Rand erkennbar - liegt daran, dass MCMC wie ein Point-Estimate network 
+lernt acceptance rate nach pretraining 1.3%

@@ -26,15 +26,15 @@ from bnnLayer import *
 torch.manual_seed(42)
 
 
-
+name = ""  #defaul ""
 
 ## Architecture
 
 bayes = True
 pretrain = True
-train = "VI" #"MCMC" #Or 'VI'
+train = "MC" #"MC" #Or 'VI'
 
-draws = 10
+draws = 1000
 
 
 n_hidden = 3
@@ -50,11 +50,11 @@ sigma2 = 0.1
 ## Hyperparameters
 epoch = 10000
 preTrainingEpoch = 100000
-n_chains = 10000
+n_chains = 1000
 
 
 loss_fun = nn.MSELoss()
-lr = 0.0001
+lr = 0.01
 
 
 
@@ -69,14 +69,17 @@ n_test = 1000 #better if it is a square
 
 
 
-in_dis = 2 #Assumes symmetric distance and zero centering
-out_dis = 2.5 #in_dis < out_dis
+
 
 in_dis_l = 0
 in_dis_r = 1.5
 out_dis_l = -0.5
 out_dis_r = 2
 
+
+#Not used for 1D
+in_dis = 2 #Assumes symmetric distance and zero centering
+out_dis = 2.5 #in_dis < out_dis
 
 
 aleatoric_train = 0.1 #aleatoric uncertainty
@@ -89,7 +92,8 @@ aleatoric_test = 0.1
 ## File management
 train_even_when_exist = True #If model exists already doesn't train it
 
-filename = '_'.join([str(n_in)+'D','O'+str(option),train,'E'+str(epoch),'H'+str(n_hidden),'T'+str(n_train)])
+# filename = '_'.join([str(n_in)+'D','O'+str(option),train,'E'+str(epoch),'H'+str(n_hidden),'T'+str(n_train)])
+filename = '_'.join([train,'E'+str(epoch),'H'+str(n_hidden),'T'+str(n_train),name])
 if bayes:
     filename = filename + "B"
 if pretrain:
@@ -98,6 +102,7 @@ if pretrain:
 
 pathModel = Path("./simpleReg/models/")
 pathTo = os.path.join(pathModel,filename+'.pth')
+pathTo_pre = os.path.join(pathModel,filename+'_pre.pth')
 
 
 
@@ -192,14 +197,18 @@ if pretrain or not bayes:
     model = nn.Sequential(nn.Linear(n_in, n_hidden),
                         nn.Sigmoid(),
                         nn.Linear(n_hidden,n_out))
-    optimizer = torch.optim.Adam(model.parameters(), lr)
-    for step in range(preTrainingEpoch):
-            pred = model(x_train)
-            loss = loss_fun(pred, y_train)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            print("\r",f"Pretraining step  {step} / {preTrainingEpoch}")
+    if os.path.exists(pathTo_pre):
+        model.load_state_dict(torch.load(pathTo_pre))
+    else:
+        optimizer = torch.optim.Adam(model.parameters(), lr)
+        for step in range(preTrainingEpoch):
+                pred = model(x_train)
+                loss = loss_fun(pred, y_train)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                print("\r",f"Pretraining step  {step} / {preTrainingEpoch}")
+        torch.save(model.state_dict(), pathTo_pre)
     pretrained_params = torch.nn.utils.parameters_to_vector(model.parameters())
     params = [param for param in model.parameters()]
     
@@ -265,6 +274,7 @@ if bayes:
         ### M  C  M  C  
         #############################
         elif train == 'MC':
+            model.eval()
             # Pretrained 0-1
             # Variational Bayes 0-1
             n_param = n_in * n_hidden + n_hidden + n_hidden * n_out + n_out #10/20B for 3H 
@@ -284,7 +294,7 @@ if bayes:
              
 
             loss_old = loss_fun(model(x_train),y_train)
-            
+            print(loss_old)
             while step < n_chains-1:
                 
                 proposal = torch.normal(markov_chain[:,step],step_size)
@@ -297,12 +307,12 @@ if bayes:
                 loss_new = loss_fun(pred, y_train)
                 
                 #If loss_old and new are close acc is still high - simple approach is to use sqrt as bijective function
-                acc = torch.pow(loss_old/loss_new,0.1)
-
-                if acc >= torch.rand(1):
+                acc = torch.log(loss_new)/torch.log(loss_old)
+                print(acc, step/(tries+1), step)
+                if acc >= 0.9999 + 0.0001*torch.rand(1): # torch.rand(1)
                     loss_old = loss_new
                     loss_collection.append(loss_new.detach().numpy())
-
+                    print(step)
                     markov_chain[:,step+1] = proposal
                     step += 1
                 tries += 1
@@ -373,10 +383,17 @@ std_test = np.std(y_stoch_test,axis=-1)
 error_test = np.abs(y_test-y_pred_avg_test)
 y_test_no_noise = f(x_test,aleatoric=0,option=option).flatten()
 
+#Quantile
+quant = 0.05
+q_up_test = np.quantile(y_stoch_test - np.reshape(y_pred_avg_test,(1000,1,1)),q = 1-quant,axis=-1)
+q_low_test = np.quantile(y_stoch_test - np.reshape(y_pred_avg_test,(1000,1,1)),q = quant,axis=-1)
 
-# if pretrain:
-#         torch.nn.utils.vector_to_parameters(pretrained_params, model.parameters())
-#         y_pred_pretrain = model(x_test).detach().numpy().copy()
+
+
+
+if pretrain and train == 'MC':
+        torch.nn.utils.vector_to_parameters(pretrained_params, model.parameters())
+        y_pred_pretrain = model(x_test).detach().numpy().copy()
 
 
 x_test = x_test.detach().numpy().copy().flatten()
@@ -454,7 +471,7 @@ if n_in==1:
                             y_pred_avg_test.flatten() + 2* std_test.flatten(),  
                             linewidth=0,alpha = 0.2,color = 'lightcoral')
     ax.plot(x_test, y_pred_avg_test, linewidth = 2, color = 'tab:red', label="$y_{avg}$")
-    colorArr = ["slateblue","mediumpurple", "orchid","plum","lightsteelblue"]
+    colorArr = ["slateblue","mediumpurple", "orchid","plum","lightsteelblue","slateblue","mediumpurple", "orchid","plum","lightsteelblue"]
     if bayes:
         for i in range(show_examples):
             ax.plot(x_test, y_stoch_test[:,:,i], linestyle='dashed',linewidth=1, color=colorArr[i],label="$y_{pred"+str(i+1)+"}$")
@@ -483,11 +500,13 @@ if n_in==1:
     #Deviation of Prediction Curves
     fig = plt.figure(figsize=(8,5))
     ax = fig.add_subplot(1,1,1)
-    for i in range(draws):
-        ax.plot(x_test, y_stoch_test[:,:,i] - y_pred_avg_test) # label="Deviation from average " + str(i)
+    for i in range(show_examples):
+        ax.plot(x_test, y_stoch_test[:,:,i] - y_pred_avg_test,linewidth=1,linestyle='dashed') # label="Deviation from average " + str(i)
    
-    ax.fill_between(x_test, std_test.flatten(), -std_test.flatten(),alpha = 0.4, 
+    ax.fill_between(x_test, 2*std_test.flatten(), -2*std_test.flatten(),alpha = 0.4, 
         linewidth = 0,color = 'lightcoral',label='standard deviation')
+    ax.fill_between(x_test, q_up_test.flatten(), q_low_test.flatten(),alpha = 0.4, 
+        linewidth = 0,color = 'plum',label='0.05 quantiles')
     plt.legend()
     plt.title("Deviation from average for single draw")
     plt.savefig(os.path.join(pathFigure,"Deviation.pdf"))
