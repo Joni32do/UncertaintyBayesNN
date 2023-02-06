@@ -6,7 +6,7 @@
  "training": {
   "save_model": true,
   "continue_training": false,
-  "epochs": 100,
+  "epochs": 10,
   "learning_rate": 0.01
  },
  "data": {
@@ -32,10 +32,10 @@
   "synth": true
  },
  "results": {
-  "current_epoch": 100,
-  "current_training_error": 3.732842515091761e-06,
-  "lowest_train_error": 3.732842515091761e-06,
-  "current_validation_error": 3.732842515091761e-06,
-  "lowest_validation_error": 3.732842515091761e-06
+  "current_epoch": 8,
+  "current_training_error": 1.5134951354411896e-05,
+  "lowest_train_error": 1.5134951354411896e-05,
+  "current_validation_error": 1.5134951354411896e-05,
+  "lowest_validation_error": 1.5134951354411896e-05
  }
 }

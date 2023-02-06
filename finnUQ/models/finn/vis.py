@@ -190,4 +190,4 @@ def vis_data(number):
 
 if __name__ == "__main__":
 
-    vis_data(number=30)
+    vis_data(number=50)

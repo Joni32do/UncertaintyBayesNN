@@ -8,7 +8,7 @@
 	"training": {
 		   "save_model": true,
 		   "continue_training": false,
-		   "epochs": 100,
+		   "epochs": 10,
 		   "learning_rate": 0.01
 	},
 	
