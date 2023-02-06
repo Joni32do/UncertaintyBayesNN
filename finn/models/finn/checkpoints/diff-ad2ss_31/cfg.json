@@ -1,0 +1,41 @@
+{
+ "paths": {},
+ "general": {
+  "device": "cpu"
+ },
+ "training": {
+  "save_model": true,
+  "continue_training": false,
+  "epochs": 300,
+  "learning_rate": 0.01
+ },
+ "data": {
+  "type": "diffusion_ad2ss",
+  "name": "data_train",
+  "noise": 0
+ },
+ "model": {
+  "name": "diff-ad2ss",
+  "number": 31,
+  "layer_sizes": [
+   2,
+   20,
+   40,
+   20,
+   1
+  ]
+ },
+ "learn": {
+  "c_out": false,
+  "loss_calc_c_out": "MSE",
+  "sk_end": false,
+  "synth": true
+ },
+ "results": {
+  "current_epoch": 300,
+  "current_training_error": 6.337926947708183e-07,
+  "lowest_train_error": 6.337926947708183e-07,
+  "current_validation_error": 6.337926947708183e-07,
+  "lowest_validation_error": 6.337926947708183e-07
+ }
+}

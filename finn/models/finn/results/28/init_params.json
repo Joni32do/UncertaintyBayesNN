@@ -1,0 +1,27 @@
+{
+    "porosity": 0.4,
+    "rho_s": 1.58, //g/cm^3
+    "k_d": 1.5, //cm^3/g, taken from slide 36 of Thomas Bierbaum
+    "beta": 0.7,
+    "f": 0.3, // ratio instantaneous vs. kinetic sorption (f = 0) -> kinetic sorption
+    "a_k": 0.1, //first order rate consant [1/d], taken from Thomas Bierbaum
+    "D_e": 2.5, //cm^2/d, 
+    "alpha_l": 9, //For calculation of D_x alpha_l neeeded [cm]
+    "v_e": 78.9, //cm/d (v_e = q/n_e; q corresponds to darcy flux, q = 35cm/d
+    "init_conc": 0.032, //inital diss. concentration mug/cm^3
+    "kin_sorb": 0.0053, //kinetically sorbed inital concentration mug/g 
+    "kin_sorb_end": 0.0021, //kinetically sorbed end concentration mug/g
+    "T_MAX": 2, //d IF END TIME CHANGES adapt index in train.py and test.py!!!!!
+    "T_STEPS": 600,
+    "X_LENGTH": 55,
+    "X_STEPS":28,
+    "sandbool": true,
+    "number": 28, //should be the same like in config.json
+    "sand": {
+        "top": 4,
+        "bot": 24,
+        "porosity": 0.31,
+        "alpha_l": 5,
+        "v_e": 101.8
+    }
+}

@@ -1,0 +1,27 @@
+{
+ "porosity": 0.4,
+ "rho_s": 1.58,
+ "k_d": 1.5,
+ "beta": 0.7,
+ "f": 0.3,
+ "a_k": 0.1,
+ "D_e": 2.5,
+ "alpha_l": 9,
+ "v_e": 78.9,
+ "init_conc": 0.032,
+ "kin_sorb": 0.0053,
+ "kin_sorb_end": 0.0021,
+ "T_MAX": 2,
+ "T_STEPS": 600,
+ "X_LENGTH": 55,
+ "X_STEPS": 28,
+ "sandbool": true,
+ "number": 31,
+ "sand": {
+  "top": 4,
+  "bot": 24,
+  "porosity": 0.31,
+  "alpha_l": 5,
+  "v_e": 101.8
+ }
+}
