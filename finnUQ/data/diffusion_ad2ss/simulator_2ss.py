@@ -186,10 +186,15 @@ class Simulator(object):
 
             g_hyd[self.x_start:self.x_stop] = self.a_k * self.rho_s/self.n_e \
                 * sk_soil
-
+            
+            ##########################################################
+            #Here I want to add NOISE
             ret[self.x_start:self.x_stop] = self.f * \
                 self.sorpt_derivat(cw_soil) * (self.rho_s/self.n_e) + 1
+            ##########################################################
 
+
+            
             # calculate change of cw and sk over over time
             cw_new = (self.disp*np.matmul(self.lap, cw) + dif_bound -
                       self.v * np.matmul(self.fd, cw) + f_hyd * cw +

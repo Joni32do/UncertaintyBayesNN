@@ -16,13 +16,11 @@
  },
  "model": {
   "name": "diff-ad2ss",
-  "number": 50,
-  "bayes": false,
+  "number": 61,
+  "bayes": true,
   "layer_sizes": [
    2,
-   20,
-   40,
-   20,
+   5,
    1
   ]
  },
@@ -33,10 +31,10 @@
   "synth": true
  },
  "results": {
-  "current_epoch": 1,
-  "current_training_error": 3.328347702336032e-06,
-  "lowest_train_error": 3.328347702336032e-06,
-  "current_validation_error": 3.328347702336032e-06,
-  "lowest_validation_error": 3.328347702336032e-06
+  "current_epoch": 2,
+  "current_training_error": 2.88747537524614e-06,
+  "lowest_train_error": 2.88747537524614e-06,
+  "current_validation_error": 2.88747537524614e-06,
+  "lowest_validation_error": 2.88747537524614e-06
  }
 }

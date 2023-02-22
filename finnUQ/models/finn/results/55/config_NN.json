@@ -5,8 +5,9 @@
  },
  "training": {
   "save_model": true,
+  "pretrain": false,
   "continue_training": false,
-  "epochs": 3,
+  "epochs": 200,
   "learning_rate": 0.01
  },
  "data": {
@@ -16,13 +17,12 @@
  },
  "model": {
   "name": "diff-ad2ss",
-  "number": 50,
+  "number": 55,
   "bayes": false,
+  "sort": false,
   "layer_sizes": [
    2,
-   20,
-   40,
-   20,
+   5,
    1
   ]
  },
@@ -31,12 +31,5 @@
   "loss_calc_c_out": "MSE",
   "sk_end": false,
   "synth": true
- },
- "results": {
-  "current_epoch": 1,
-  "current_training_error": 3.328347702336032e-06,
-  "lowest_train_error": 3.328347702336032e-06,
-  "current_validation_error": 3.328347702336032e-06,
-  "lowest_validation_error": 3.328347702336032e-06
  }
 }

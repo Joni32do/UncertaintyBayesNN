@@ -297,29 +297,28 @@ class LinearBayes(nn.Module):
     Implementation of a linear layer with Bayesian weights.
     Only accepts matrices with fitting dimensions or scalar values
 
-    TODO: Add bias
     """
-    def __init__(self, n_in, n_out, mu_w_init=0,sigma_w_init=1, mu_b_init=0, sigma_b_init=1):
+    def __init__(self, n_in, n_out, mu_w_init=0,rho_w_prior=1, mu_b_prior=0, rho_b_prior=0):
         super(LinearBayes, self).__init__()
         if not torch.is_tensor(mu_w_init):
             mu_w_init = mu_w_init + torch.rand(n_out, n_in) - 0.5
-        if not torch.is_tensor(sigma_w_init):
-            sigma_w_init = torch.log(sigma_w_init*torch.ones(n_out,n_in))
-        if  not torch.is_tensor(mu_b_init):
-            mu_b_init = mu_b_init + torch.rand(n_out,1)
+        if not torch.is_tensor(rho_w_prior):
+            rho_w_prior = rho_w_prior*torch.ones(n_out,n_in)
+        if  not torch.is_tensor(mu_b_prior):
+            mu_b_prior = mu_b_prior + torch.rand(n_out,1)
         else:
-            mu_b_init = torch.reshape(mu_b_init,(n_out,1))
-        if not torch.is_tensor(sigma_b_init):
-            sigma_b_init = torch.log(sigma_b_init*torch.ones(n_out,1))
+            mu_b_prior = torch.reshape(mu_b_prior,(n_out,1))
+        if not torch.is_tensor(rho_b_prior):
+            rho_b_prior = rho_b_prior*torch.ones(n_out,1)
 
         #Weights
         self.mu_w = nn.Parameter(mu_w_init)
-        self.sigma_w = nn.Parameter(sigma_w_init)
+        self.sigma_w = nn.Parameter(rho_w_prior)
         self.eps_w = dist.normal.Normal(torch.zeros(n_out,n_in), torch.ones(n_out,n_in))
         
         #Bias
-        self.mu_b = nn.Parameter(mu_b_init)
-        self.sigma_b = nn.Parameter(sigma_b_init)
+        self.mu_b = nn.Parameter(mu_b_prior)
+        self.sigma_b = nn.Parameter(rho_b_prior)
         self.eps_b = dist.normal.Normal(torch.zeros(n_out,1), torch.ones(n_out,1))
 
         self.weights = None #One could also init with something
@@ -329,6 +328,30 @@ class LinearBayes(nn.Module):
         self.weights = self.mu_w + (torch.exp(self.sigma_w) * self.eps_w.sample() if stochastic else 0)
         self.bias = self.mu_b + (torch.exp(self.sigma_b)*self.eps_b.sample() if stochastic else 0)
 
+
+    def sort_bias(self,previous_weight):
+        # Sort the weights if previous layer was shuffled
+        self.mu_w.data = self.mu_w.data[:,previous_weight]
+        self.sigma_w.data = self.sigma_w.data[:,previous_weight]
+
+        # Sort the bias vector in descending order
+        sorted_bias, sorted_indices = torch.sort(self.mu_b, descending=True)
+        self.mu_b.data = sorted_bias
+
+        # Update the weight matrix to match the sorted bias vector 
+        self.sigma_b.data = self.sigma_b.data[sorted_indices]
+        self.mu_w.data = self.mu_w.data[sorted_indices, :]
+        self.sigma_w.data = self.sigma_w.data[sorted_indices, :]
+        return sorted_indices
+    
+    def kl_divergence_loss(self):
+         '''
+         TODO: This is Bullshit - Do I even need it?
+         '''
+         lhood_w = Normal(self.prior_w,self.prior_sig_w).log_prob(self.weights).sum()
+         lhood_b = Normal(self.prior_b,self.prior_sig_b).log_prob(self.bias).sum()
+
+         return 0
     
     def forward(self, x):
         self.sample()

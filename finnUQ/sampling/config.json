@@ -26,8 +26,8 @@
 
 	"data": {
 		"type": "diffusion_sorption",  // "burger", "diffusion_sorption", "diffusion_reaction", "allen_cahn"
-		"name": "experiment", // "data_train", "data_ext", "data_test"
-		"noise": 0.0
+		"name": "data_train", // "data_train", "data_ext", "data_test"
+		"noise": 0.0 //is this reasonable
 	},
 
 	"model": {

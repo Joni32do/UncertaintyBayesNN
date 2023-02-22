@@ -17,11 +17,12 @@ import sys
 import pickle5 as pickle
 
 sys.path.append("..")
-print(sys.path)
+# print(sys.path)
 
 from utils.configuration import Configuration
 from finn import *
 import pandas as pd
+import os
 
 
 
@@ -39,7 +40,7 @@ def __add_fig(fig, ax, row:float, column:float, title:str, value:np.ndarray,
         x (np.ndarray): _description_
         t (np.ndarray): _description_
     """
-    font_size = 22
+    font_size = 12
     h = ax[row, column].imshow(value, interpolation='nearest', 
                     extent=[t.min(), t.max(),
                             x.min(), x.max()],
@@ -54,7 +55,8 @@ def __add_fig(fig, ax, row:float, column:float, title:str, value:np.ndarray,
     ax[row, column].set_xlabel('$t [d]$', fontsize=font_size)
     ax[row, column].set_ylabel('$x [cm]$', fontsize=font_size)
     ax[row, column].set_title(title, fontsize = font_size)
-    for label in (ax[row, column].get_xticklabels() + ax[row, column].get_yticklabels()): label.set_fontsize(font_size)
+    for label in (ax[row, column].get_xticklabels() + ax[row, column].get_yticklabels()): 
+        label.set_fontsize(font_size)
 
 def init_model(number:float, config_NN:Configuration):
     """Loads selected model
@@ -66,10 +68,14 @@ def init_model(number:float, config_NN:Configuration):
         u_NN: NN calculated solution
         u_init_NN: c and sk as initialized in params.json before starting the NN
     """
-    with open(f"results/{number}/model.pkl", "rb") as inp:
+    
+    data_path = os.path.join("results",str(number))
+    with open(os.path.join(data_path,"model.pkl"), "rb") as inp:
         model = pickle.load(inp)
-
-    u_NN = np.load(f"results/{number}/u_hat.npy")
+    # with open(f"results/{number}/model.pkl", "rb") as inp:
+    #     model = pickle.load(inp)
+   
+    u_NN = np.load(os.path.join(data_path,"u_hat.npy"))
     u = np.load(f"results/{number}/u_FD.npy")
     t = np.load(f"results/{number}/t_series.npy")
     x = np.load(f"results/{number}/x_series.npy")
@@ -110,7 +116,7 @@ def vis_diff(model, u_FD:np.ndarray, u_NN:np.ndarray, t:np.ndarray, x:np.ndarray
 
     fig, ax = plt.subplots(1,2)
     ax = np.expand_dims(ax, axis=0)
-    print(ax.shape)
+    # print(ax.shape)
     __add_fig(fig=fig, ax=ax, row=0, column=0, title=r"$c_{FD} - c_{FINN} \left[\frac{\mu g}{cm^3}\right]$",
         value=diff_c, x=x, t=t)
     __add_fig(fig=fig, ax=ax, row=0, column=1, title=r"$s_{k, FD} - s_{k, FINN} \left[\frac{\mu g}{g}\right]$",
@@ -190,4 +196,4 @@ def vis_data(number):
 
 if __name__ == "__main__":
 
-    vis_data(number=50)
+    vis_data(number=61)

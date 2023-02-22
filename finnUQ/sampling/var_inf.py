@@ -483,25 +483,23 @@ model = FINN_DiffSorp(
         use_exp=False
     ).to(config.general.device)
 
-optimizer = th.optim.Adam(model.parameters(),lr=0.001)
+optimizer = th.optim.Adam(model.parameters(),lr=0.01)
 
 def closure():
     optimizer.zero_grad()
     loss = model.sample_elbo(breakthrough_time_core2, u)
-    
     loss.backward()
-    
-    print(loss.item())
     return loss
 
 best_loss = np.inf
 
 save_file = 'var_inf_ensemble.pt'
 
-for itr in range(2000):
+for itr in range(10):
     loss = optimizer.step(closure)
-    print(loss.item())
-    print(itr)
+    print("Iteration ",itr)
+    print("\t Loss: ",loss.item())
+    
     if loss.item() < best_loss:
         th.save(model.state_dict(), save_file)
         best_loss = loss.item()

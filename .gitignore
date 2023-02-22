@@ -16,3 +16,4 @@ __pycache__/
 *.sw?
 /bin
 /models/*/out/*
+*.xlsx

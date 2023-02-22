@@ -12,12 +12,15 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import sys
+
+from finn import *
+
 sys.path.append("..")
 
 import time
 import pickle
 from utils.configuration import Configuration
-from finn import *
+
 
 def plot_tensor(tensor):
     fig, ax = plt.subplots(1,1)
@@ -94,49 +97,89 @@ def run_testing(print_progress=False, visualize=False, model_number=None):
         # #adds noice with mu = 0, std = data.noise
         # #for all rows apart from the first one
         # # 1 to last in all dimensions
-        u[1:] = u[1:] + th.normal(th.zeros_like(u[1:]),th.ones_like(u[1:])*config.data.noise)
+        u[1:] = u[1:] + th.normal(th.zeros_like(u[1:]),
+                                    th.ones_like(u[1:])*config.data.noise)
 
         # same dx over all x
-        dx = x[1]-x[0]  
+        dx = x[1] - x[0]  
             
         # Initialize and set up the model
-        model = FINN_DiffAD2ss(
-            u = u,
-            D = np.array(params.alpha_l*params.v_e+params.D_e),
-            BC = np.array([0.0, 0.0]),
-            dx = dx,
-            layer_sizes = config.model.layer_sizes,
-            device = device,
-            mode="test",
+        if config.model.bayes:
+            model = FINN_DiffAD2ssBayes(
+            u=u,
+            D=np.array(params.alpha_l*params.v_e+params.D_e),
+            BC=np.array([0.0]),
+            dx=dx,
+            layer_sizes=config.model.layer_sizes,
+            device=device,
+            mode="train",
             learn_coeff=False,
-            learn_f=True,
+            learn_f=False,
             learn_f_hyd=False,
             learn_g_hyd=False,
-            learn_r_hyd=False,
-            learn_k_d=True,
-            learn_beta=True,
-            learn_alpha=True,
+            learn_r_hyd=True,
+            learn_k_d=False,
+            learn_beta=False,
+            learn_alpha=False,
             t_steps=len(t),
-            rho_s = np.array(params.rho_s),
-            f = np.array(params.f),
-            k_d = np.array(params.k_d),
-            beta = np.array(params.beta),
-            n_e = np.array(params.porosity),
-            alpha = np.array(params.a_k),
-            v_e = np.array(params.v_e),
+            rho_s=np.array(params.rho_s),
+            f=np.array(params.f),
+            k_d=np.array(params.k_d),
+            beta=np.array(params.beta),
+            n_e=np.array(params.porosity),
+            alpha=np.array(params.a_k),
+            v_e=np.array(params.v_e),
             sand=params.sandbool,
-            D_sand = np.array(params.sand.alpha_l*params.sand.v_e),
-            n_e_sand = np.array(params.sand.porosity),
-            x_start_soil = np.array(params.sand.top),
-            x_stop_soil = np.array(params.sand.bot),
-            x_steps_soil = np.array(params.X_STEPS),
-            alpha_l_sand = np.array(params.sand.alpha_l),
-            v_e_sand = np.array(params.sand.v_e),
+            D_sand=np.array(params.sand.alpha_l*params.sand.v_e),
+            n_e_sand=np.array(params.sand.porosity),
+            x_start_soil=np.array(params.sand.top),
+            x_stop_soil=np.array(params.sand.bot),
+            x_steps_soil=np.array(params.X_STEPS),
+            alpha_l_sand=np.array(params.sand.alpha_l),
+            v_e_sand=np.array(params.sand.v_e),
             config=None,
             learn_stencil=False,
             bias=True,
             sigmoid=True
         ).to(device=device)
+        else:
+            model = FINN_DiffAD2ss(
+                u=u,
+                D=np.array(params.alpha_l*params.v_e+params.D_e),
+                BC=np.array([0.0]),
+                dx=dx,
+                layer_sizes=config.model.layer_sizes,
+                device=device,
+                mode="train",
+                learn_coeff=False,
+                learn_f=False,
+                learn_f_hyd=False,
+                learn_g_hyd=False,
+                learn_r_hyd=True,
+                learn_k_d=False,
+                learn_beta=False,
+                learn_alpha=False,
+                t_steps=len(t),
+                rho_s=np.array(params.rho_s),
+                f=np.array(params.f),
+                k_d=np.array(params.k_d),
+                beta=np.array(params.beta),
+                n_e=np.array(params.porosity),
+                alpha=np.array(params.a_k),
+                v_e=np.array(params.v_e),
+                sand=params.sandbool,
+                D_sand=np.array(params.sand.alpha_l*params.sand.v_e),
+                n_e_sand=np.array(params.sand.porosity),
+                x_start_soil=np.array(params.sand.top),
+                x_stop_soil=np.array(params.sand.bot),
+                x_steps_soil=np.array(params.X_STEPS),
+                alpha_l_sand=np.array(params.sand.alpha_l),
+                v_e_sand=np.array(params.sand.v_e),
+                config=None,
+                learn_stencil=False,
+                bias=True,
+                sigmoid=True
+            ).to(device=device)
         
     elif config.data.type == "diffusion_sorption":
         # Load samples, together with x, y, and t series
@@ -277,8 +320,8 @@ def run_testing(print_progress=False, visualize=False, model_number=None):
         u_hat = u_hat.detach().cpu()
         u = u.detach().cpu()
         t = t.detach().cpu()
-        plot_tensor(u_hat[...,0])
-        plot_tensor(u[...,0])
+        plot_tensor(u_hat[:,0])
+        plot_tensor(u[:,0])
         # Compute error
         mse = nn.MSELoss()(u_hat, u)
         print(f"MSE: {mse}")

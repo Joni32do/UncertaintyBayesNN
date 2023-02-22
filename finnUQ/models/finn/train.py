@@ -15,12 +15,12 @@ from threading import Thread
 import numpy as np
 import torch as th
 import torch.nn as nn
+from finn import *
 
 sys.path.append("..")
 import utils.helper_functions as helpers
 from utils.configuration import Configuration
 
-from finn import *
 
 def run_training(print_progress=True, model_number=None):
 
@@ -109,13 +109,12 @@ def run_training(print_progress=True, model_number=None):
         ).to(device=device)
     
     elif config.data.type == "diffusion_ad2ss":
-
         # Load samples, together with x, y, and t series.
         # If parameters are learned, initial guesses should be defined in the
         # init_params.json
         params = Configuration(f"results/{config.model.number}/init_params.json") #Warum hier ohne os.path
         # params = Configuration(os.path.join("results",config.model.number,"init_params.json"))
-
+IbzQsvDgql9h
         # synthetic data is used
         if config.data.name == "data_train":
             u = np.load(f"results/{config.model.number}/u_FD.npy")
@@ -124,6 +123,7 @@ def run_training(print_progress=True, model_number=None):
             # only use (1/4) of synthetic data set
             u = u[:, :len(t) // 4 + 1, :]
             t = t[:len(t) // 4 + 1]
+            print(u,t)
 
             # transform numpy arrays to pytorch tensors
             u = th.tensor(u, dtype=th.float).to(device=device)
@@ -139,9 +139,11 @@ def run_training(print_progress=True, model_number=None):
         x = th.tensor(np.load(f"results/{config.model.number}/x_series.npy"),
                         dtype=th.float).to(device=device)
 
+    	##################### Noise #########
         # adds noice with mu = 0, std = data.noise
         u[1:] = u[1:] + th.normal(th.zeros_like(u[1:]),
                                     th.ones_like(u[1:])*config.data.noise)
+        #####################################
 
         # same dx over all x
         dx = x[1] - x[0]
@@ -149,7 +151,8 @@ def run_training(print_progress=True, model_number=None):
         # Initialize and set up the Two-Site sorption model
         # Dependeing on which parameter/functional relationship should be learned
         # corresponding boolean variables have to be changed
-        model = FINN_DiffAD2ss(
+        if config.model.bayes:
+            model = FINN_DiffAD2ssBayes(
             u=u,
             D=np.array(params.alpha_l*params.v_e+params.D_e),
             BC=np.array([0.0]),
@@ -159,8 +162,8 @@ def run_training(print_progress=True, model_number=None):
             mode="train",
             learn_coeff=False,
             learn_f=False,
-            learn_f_hyd=True,
-            learn_g_hyd=True,
+            learn_f_hyd=False,
+            learn_g_hyd=False,
             learn_r_hyd=True,
             learn_k_d=False,
             learn_beta=False,
@@ -186,6 +189,44 @@ def run_training(print_progress=True, model_number=None):
             bias=True,
             sigmoid=True
         ).to(device=device)
+        else:
+            model = FINN_DiffAD2ss(
+                u=u,
+                D=np.array(params.alpha_l*params.v_e+params.D_e),
+                BC=np.array([0.0]),
+                dx=dx,
+                layer_sizes=config.model.layer_sizes,
+                device=device,
+                mode="train",
+                learn_coeff=False,
+                learn_f=False,
+                learn_f_hyd=False,
+                learn_g_hyd=False,
+                learn_r_hyd=True,
+                learn_k_d=False,
+                learn_beta=False,
+                learn_alpha=False,
+                t_steps=len(t),
+                rho_s=np.array(params.rho_s),
+                f=np.array(params.f),
+                k_d=np.array(params.k_d),
+                beta=np.array(params.beta),
+                n_e=np.array(params.porosity),
+                alpha=np.array(params.a_k),
+                v_e=np.array(params.v_e),
+                sand=params.sandbool,
+                D_sand=np.array(params.sand.alpha_l*params.sand.v_e),
+                n_e_sand=np.array(params.sand.porosity),
+                x_start_soil=np.array(params.sand.top),
+                x_stop_soil=np.array(params.sand.bot),
+                x_steps_soil=np.array(params.X_STEPS),
+                alpha_l_sand=np.array(params.sand.alpha_l),
+                v_e_sand=np.array(params.sand.v_e),
+                config=None,
+                learn_stencil=False,
+                bias=True,
+                sigmoid=True
+            ).to(device=device)
 
 
     elif config.data.type == "diffusion_reaction":
@@ -304,6 +345,9 @@ def run_training(print_progress=True, model_number=None):
     """
     a = time.time()
 
+    if config.model.bayes and config.training.pretrain:
+        pass
+
     # Start the training and iterate over all epochs
     for epoch in range(config.training.epochs):
         epoch_start_time = time.time()
@@ -323,17 +367,17 @@ def run_training(print_progress=True, model_number=None):
             # forward pass
             u_hat = model(t=t, u=u)
 
-            if config.data.type == "diffusion_ad2ss":
-                # print(f"f: {1/(1+np.exp(-(model.__dict__['_parameters']['f'].item())))}")
-                # print(f"f: {1/(1+np.exp(-(model.__dict__['_parameters']['f'].item())))}")
-                # print(f"k_d: {np.abs(model.__dict__['_parameters']['k_d'].item())}")
-                # print(f"beta: {1/(1+np.exp(-(model.__dict__['_parameters']['beta'].item())))}")
-                # print(f"alpha: {np.abs(model.__dict__['_parameters']['alpha'].item())}")
-                mse = nn.MSELoss(reduction="mean")(u_hat, u)
+            if config.model.bayes and config.model.sort:
+                sort_idx = None
+                for idx, l in enumerate(model.modules()):
+                    if idx == 0:
+                        print("Das klappt (hoffentlich)")
+                        sort_idx = th.arange(0,l.in_features)
+                    sort_idx = l.sort(sort_idx)
 
-            else:
-                mse = nn.MSELoss(reduction="mean")(u_hat, u)
-            print(f"loss: {mse}")
+            
+            mse = nn.MSELoss(reduction="mean")(u_hat, u)
+            #TODO: Hier muss ich noch den KL_Loss hinzufügen
 
             # do backward pass
             mse.backward()
@@ -341,10 +385,8 @@ def run_training(print_progress=True, model_number=None):
             return mse
 
         # Perform one optimization step towards direction of gradients
-        optimizer.step(closure)
+        mse = optimizer.step(closure)
 
-        # Extract the MSE value from the closure function
-        mse = closure()
 
         
 
@@ -369,9 +411,11 @@ def run_training(print_progress=True, model_number=None):
 
         # Print progress to the console
         if print_progress:
-            print(f'''Epoch {str(epoch+1).zfill(int(np.log10(config.training.epochs))+1)}/{str(config.training.epochs)} 
-                    took {str(np.round(time.time() - epoch_start_time, 2)).ljust(5, '0')} seconds. 
-                    \t\tAverage epoch training error: {train_sign}{str(np.round(epoch_errors_train[-1], 10)).ljust(12, ' ')}''')
+            print(f'''Epoch {str(epoch+1).zfill(int(np.log10(config.training.epochs))+1)}\{config.training.epochs} \t Time: {str(np.round(time.time() - epoch_start_time, 2))} \t Error: {train_sign}{str(np.round(epoch_errors_train[-1], 10))}
+            ''')
+            # print(f'''Epoch {str(epoch+1).zfill(int(np.log10(config.training.epochs))+1)}/{str(config.training.epochs)} 
+            #         took {str(np.round(time.time() - epoch_start_time, 2)).ljust(5, '0')} seconds. 
+            #         \t\tAverage epoch training error: {train_sign}{str(np.round(epoch_errors_train[-1], 10)).ljust(12, ' ')}''')
     
     b = time.time()
     if print_progress:
