@@ -5,7 +5,7 @@ Contains all the code of my bachelor thesis **Uncertainty quantification using b
 
 Perhabs I will firstfully explore how to meassure uncertainty in a dataset and introduce some common meassures from statistics. This would be a good opportunity to explain:
 
-* Confusion matrix
+
 * Sensitivity and Specificity
 * Entropy
 * ROC (Receiver Operator Characteistic) and Calibration Curve (Check if indeed they represent the same dynamic)
