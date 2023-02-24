@@ -19,16 +19,21 @@ class LinearBayes(nn.Module):
 
     """
     def __init__(self, n_in, n_out, mu_w_prior=0,rho_w_prior=-1, mu_b_prior=0, rho_b_prior=-1, 
-                 zero_variance = 0, pretrain = False):
+                 bayes_factor = 1, pretrain = False):
         
         super(LinearBayes, self).__init__()
         
-        #Sparse Bayesian - Neurons or Proportional
-        if zero_variance < 1:
-            zero_variance = int(zero_variance * n_out)
-        self.noise_switch = torch.ones(n_out)
-        if zero_variance != 0:
-             self.noise_switch[:int(zero_variance)-1] = 0
+        #Sparse Bayesian#
+
+        #Proportional to Bayes (special case: If you only want one neuron to be Bayes you must do it by 1/n_out)
+        if bayes_factor <= 1:
+            bayes_factor = int(bayes_factor * n_out)
+
+        #Neurons
+        self.is_bayes = torch.zeros(n_out,1)
+        if bayes_factor != 0:
+             self.is_bayes[:int(bayes_factor)] = 1
+
         #Mode
         self.pretrain = pretrain
         
@@ -56,24 +61,31 @@ class LinearBayes(nn.Module):
          
 
     def sample(self, stochastic = True):
-        self.weights = self.mu_w
-        self.bias = self.mu_b
         if stochastic:
-             noise_w = Normal(torch.zeros(self.n_in), torch.ones(self.n_in))
-             noise_b = Normal(0,1)
-             for idx,addNoise in enumerate(self.noise_switch):
-                  if addNoise:
-                        with torch.no_grad(): #TODO: Nochmal anschauen, warum das hier benötigt wird
-                            
-                            self.weights[idx,:] += torch.exp(self.rho_w[idx,:]) * noise_w.sample()
-                            self.bias[idx] += torch.exp(self.rho_b[idx]) * noise_b.sample()
+             noise_w = Normal(torch.zeros_like(self.mu_w), torch.ones_like(self.mu_w))
+             noise_b = Normal(torch.zeros_like(self.mu_b), torch.ones_like(self.mu_b))
+             
+             print(self.mu_b.data)
+             print(self.rho_b.data)
+             print(self.mu_w.data)
+             print(self.rho_w.data)
+             self.weights = self.mu_w  + torch.exp(self.rho_w) * noise_w.sample() * self.is_bayes
+             self.bias = self.mu_b + torch.exp(self.rho_b) * noise_b.sample() * self.is_bayes.squeeze()
+             print(self.weights)
+             print(self.bias)
+
+
+        else:
+            self.weights = self.mu_w
+            self.bias = self.mu_b
 
     def sort_bias(self,previous_weight):
-
-        print(self.mu_b.data)
-        print(self.rho_b.data)
-        print(self.mu_w.data)
-        print(self.rho_w.data)
+        # print("Before Sort:")
+        # print(self.mu_b.data)
+        # print(self.rho_b.data)
+        # print(self.mu_w.data)
+        # print(self.rho_w.data)
+        # print(self.is_bayes)
 
         # Sort the weights if previous layer was shuffled
         self.mu_w.data = self.mu_w.data[:,previous_weight]
@@ -89,12 +101,18 @@ class LinearBayes(nn.Module):
         #Sort weights
         self.mu_w.data = self.mu_w.data[sorted_indices, :]
         self.rho_w.data = self.rho_w.data[sorted_indices, :]
-        print(previous_weight)
-        print(sorted_indices)
-        print(self.mu_b.data)
-        print(self.rho_b.data)
-        print(self.mu_w.data)
-        print(self.rho_w.data)
+        #Sort is_bayes
+        self.is_bayes = self.is_bayes[sorted_indices]
+        # print("Sort indicies")
+        # print(previous_weight)
+        # print(sorted_indices)
+        # print("After Sort:")
+        # print(self.mu_b.data)
+        # print(self.rho_b.data)
+        # print(self.mu_w.data)
+        # print(self.rho_w.data)
+        # print(self.is_bayes)
+
 
 
         return sorted_indices
@@ -114,13 +132,6 @@ class LinearBayes(nn.Module):
         else:
              self.sample()
         return F.linear(x, self.weights, self.bias)
-
-
-
-
-
-
-
 
 """       
         self.prior_mu = prior_mu
