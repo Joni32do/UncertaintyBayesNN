@@ -329,7 +329,7 @@ def run_testing(print_progress=False, visualize=False, model_number=None):
             pickle.dump(model, outp, pickle.HIGHEST_PROTOCOL)
         np.save(f"results/{config.model.number}/u_hat", u_hat)
         np.save(f"results/{config.model.number}/u", u)
-        params.save(f"results/{config.model.number}/", filename="params_NN.json")
+        # params.save(f"results/{config.model.number}/", filename="params_NN.json")
         config.save(f"results/{config.model.number}/", filename="config_NN.json")
     else:
         # Initialize the criterion (loss)

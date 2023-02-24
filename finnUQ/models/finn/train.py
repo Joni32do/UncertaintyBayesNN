@@ -114,7 +114,7 @@ def run_training(print_progress=True, model_number=None):
         # init_params.json
         params = Configuration(f"results/{config.model.number}/init_params.json") #Warum hier ohne os.path
         # params = Configuration(os.path.join("results",config.model.number,"init_params.json"))
-IbzQsvDgql9h
+
         # synthetic data is used
         if config.data.name == "data_train":
             u = np.load(f"results/{config.model.number}/u_FD.npy")

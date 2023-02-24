@@ -10,31 +10,119 @@ from torch.distributions import Normal
 from torch.nn.parameter import Parameter
 
 
-'''
-Not the best practics, but I know just compare all the different approaches and find a mitigate which works the best for me
-and my usecase
-'''
 
-# Bayesian-neural-network-pytorch
-class BayesLinear(nn.Module):
-    r"""
-    Applies Bayesian Linear
-
-    Arguments:
-        prior_mu (Float): mean of prior normal distribution.
-        prior_sigma (Float): sigma of prior normal distribution.
-
-    .. note:: other arguments are following linear of pytorch 1.2.0.
-    https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/linear.py
-    
+#My own which does work 
+class LinearBayes(nn.Module):
     """
-    __constants__ = ['prior_mu', 'prior_sigma', 'bias', 'in_features', 'out_features']
+    Implementation of a linear layer with Bayesian weights.
+    Only accepts matrices with fitting dimensions or scalar values
 
-    def __init__(self, prior_mu, prior_sigma, in_features, out_features, bias=True):
-        super(BayesLinear, self).__init__()
-        self.in_features = in_features
-        self.out_features = out_features
+    """
+    def __init__(self, n_in, n_out, mu_w_prior=0,rho_w_prior=-1, mu_b_prior=0, rho_b_prior=-1, 
+                 zero_variance = 0, pretrain = False):
         
+        super(LinearBayes, self).__init__()
+        
+        #Sparse Bayesian - Neurons or Proportional
+        if zero_variance < 1:
+            zero_variance = int(zero_variance * n_out)
+        self.noise_switch = torch.ones(n_out)
+        if zero_variance != 0:
+             self.noise_switch[:int(zero_variance)-1] = 0
+        #Mode
+        self.pretrain = pretrain
+        
+        #Additional support for scalar initialization
+        if not torch.is_tensor(mu_w_prior):
+            mu_w_prior = mu_w_prior + torch.rand(n_out, n_in) - 0.5
+        if not torch.is_tensor(rho_w_prior):
+            rho_w_prior = rho_w_prior*torch.ones(n_out,n_in)
+        if  not torch.is_tensor(mu_b_prior):
+            mu_b_prior = mu_b_prior + torch.rand(n_out) - 0.5
+        if not torch.is_tensor(rho_b_prior):
+            rho_b_prior = rho_b_prior*torch.ones(n_out)
+
+        self.n_in = n_in
+        self.n_out = n_out
+
+        #Weights
+        self.mu_w = nn.Parameter(mu_w_prior)
+        self.rho_w = nn.Parameter(rho_w_prior)
+        self.weights = None
+        #Bias
+        self.mu_b = nn.Parameter(mu_b_prior)
+        self.rho_b = nn.Parameter(rho_b_prior)
+        self.bias = None    
+         
+
+    def sample(self, stochastic = True):
+        self.weights = self.mu_w
+        self.bias = self.mu_b
+        if stochastic:
+             noise_w = Normal(torch.zeros(self.n_in), torch.ones(self.n_in))
+             noise_b = Normal(0,1)
+             for idx,addNoise in enumerate(self.noise_switch):
+                  if addNoise:
+                        with torch.no_grad(): #TODO: Nochmal anschauen, warum das hier benötigt wird
+                            
+                            self.weights[idx,:] += torch.exp(self.rho_w[idx,:]) * noise_w.sample()
+                            self.bias[idx] += torch.exp(self.rho_b[idx]) * noise_b.sample()
+
+    def sort_bias(self,previous_weight):
+
+        print(self.mu_b.data)
+        print(self.rho_b.data)
+        print(self.mu_w.data)
+        print(self.rho_w.data)
+
+        # Sort the weights if previous layer was shuffled
+        self.mu_w.data = self.mu_w.data[:,previous_weight]
+        self.rho_w.data = self.rho_w.data[:,previous_weight]
+
+        # Sort the bias vector in descending order
+        sorted_bias, sorted_indices = torch.sort(self.mu_b, descending=True)
+
+        
+        #Sort bias 
+        self.mu_b.data = sorted_bias
+        self.rho_b.data = self.rho_b.data[sorted_indices]
+        #Sort weights
+        self.mu_w.data = self.mu_w.data[sorted_indices, :]
+        self.rho_w.data = self.rho_w.data[sorted_indices, :]
+        print(previous_weight)
+        print(sorted_indices)
+        print(self.mu_b.data)
+        print(self.rho_b.data)
+        print(self.mu_w.data)
+        print(self.rho_w.data)
+
+
+        return sorted_indices
+  
+    def kl_divergence_loss(self):
+         '''
+         TODO: This is Bullshit - Do I even need it?
+         '''
+         lhood_w = Normal(self.prior_w,self.prior_sig_w).log_prob(self.weights).sum()
+         lhood_b = Normal(self.prior_b,self.prior_sig_b).log_prob(self.bias).sum()
+
+         return 0
+    
+    def forward(self, x):
+        if self.pretrain:
+            self.sample(stochastic = False)
+        else:
+             self.sample()
+        return F.linear(x, self.weights, self.bias)
+
+
+
+
+
+
+
+
+"""       
         self.prior_mu = prior_mu
         self.prior_sigma = prior_sigma
         self.prior_log_sigma = np.log(prior_sigma)
@@ -42,122 +130,15 @@ class BayesLinear(nn.Module):
         self.weight_mu = nn.Parameter(torch.Tensor(out_features, in_features))
         self.weight_log_sigma = nn.Parameter(torch.Tensor(out_features, in_features))
         self.register_buffer('weight_eps', None)
-               
-        if bias is None or bias is False :
-            self.bias = False
-        else :
-            self.bias = True
+  
             
-        if self.bias:
-            self.bias_mu = nn.Parameter(torch.Tensor(out_features))
-            self.bias_log_sigma = nn.Parameter(torch.Tensor(out_features))
-            self.register_buffer('bias_eps', None)
-        else:
-            self.register_parameter('bias_mu', None)
-            self.register_parameter('bias_log_sigma', None)
-            self.register_buffer('bias_eps', None)
-            
-            
-            
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        # Initialization method of Adv-BNN
-        stdv = 1. / np.sqrt(self.weight_mu.size(1))
-        self.weight_mu.data.uniform_(-stdv, stdv)
-        self.weight_log_sigma.data.fill_(self.prior_log_sigma)
-        if self.bias :
-            self.bias_mu.data.uniform_(-stdv, stdv)
-            self.bias_log_sigma.data.fill_(self.prior_log_sigma)
-         
-        # Initialization method of the original torch nn.linear.
-#         init.kaiming_uniform_(self.weight_mu, a=math.sqrt(5))
-#         self.weight_log_sigma.data.fill_(self.prior_log_sigma)
+"""
+     
         
-#         if self.bias :
-#             fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight_mu)
-#             bound = 1 / math.sqrt(fan_in)
-#             init.uniform_(self.bias_mu, -bound, bound)
-            
-#             self.bias_log_sigma.data.fill_(self.prior_log_sigma)
-
-    def freeze(self) :
-        self.weight_eps = torch.randn_like(self.weight_log_sigma)
-        if self.bias :
-            self.bias_eps = torch.randn_like(self.bias_log_sigma)
-        
-    def unfreeze(self) :
-        self.weight_eps = None
-        if self.bias :
-            self.bias_eps = None 
-            
-    def forward(self, input):
-        r"""
-        Overriden.
-        """
-        if self.weight_eps is None :
-            weight = self.weight_mu + torch.exp(self.weight_log_sigma) * torch.randn_like(self.weight_log_sigma)
-        else :
-            weight = self.weight_mu + torch.exp(self.weight_log_sigma) * self.weight_eps
-        
-        if self.bias:
-            if self.bias_eps is None :
-                bias = self.bias_mu + torch.exp(self.bias_log_sigma) * torch.randn_like(self.bias_log_sigma)
-            else :
-                bias = self.bias_mu + torch.exp(self.bias_log_sigma) * self.bias_eps                
-        else :
-            bias = None
-            
-        return F.linear(input, weight, bias)
-        
-    def extra_repr(self):
-        r"""
-        Overriden.
-        """
-        return 'prior_mu={}, prior_sigma={}, in_features={}, out_features={}, bias={}'.format(self.prior_mu, self.prior_sigma, self.in_features, self.out_features, self.bias is not None)
-
-
-
-
-
-####### From FINN
-class Bayes_Layer(nn.Module):
-    """
-        This is the building block layer for bayesian NODE's
-    """
-
-    def __init__(self, input_features, output_features, prior_var=1.):
-
-        super().__init__()
-
-        # set input and output dimensions
-        self.input_features = input_features
-        self.output_features = output_features
-
-        # initialize mu and rho parameters for the weights of the layer
-        self.w_mu = nn.Parameter(Normal(0., 0.1).expand(
-            (output_features, input_features)).sample())
-        self.w_rho = nn.Parameter(Normal(-3., 0.1).expand(
-            (output_features, input_features)).sample())
-
-        # initialize mu and rho parameters for the layer's bias
-        self.b_mu = nn.Parameter(Normal(0., 0.1).expand(
-            (output_features,)).sample())
-        self.b_rho = nn.Parameter(Normal(-3., 0.1).expand(
-            (output_features,)).sample())
-
-        # initialize weight samples
-        # (these will be calculated whenever the layer makes a prediction)
-        self.w = None
-        self.b = None
-
-        # initialize prior distribution for all of the weights and biases
-        self.prior = torch.distributions.Normal(0, prior_var)
-        
-    def sample_weights(self):
-        """This functionality is implemented here in order to assure
+"""     def sample_weights(self):
+        This functionality is implemented here in order to assure
         that the weights are sampled before any time forward propagation
-        """
+        
         # sample weights
         self.w = Normal(self.w_mu, torch.log(1+torch.exp(self.w_rho))).rsample()
         
@@ -176,41 +157,16 @@ class Bayes_Layer(nn.Module):
             self.b_mu.data, torch.log(1+torch.exp(self.b_rho)))
         self.log_post = self.w_post.log_prob(
             self.w).sum() + self.b_post.log_prob(self.b).sum()
-
-    def forward(self, input):
-        """
-          Standard linear forward propagation
-        """
-        return F.linear(input, self.w, self.b)
+ """
 
 
 
 
 
 
-class VIModule(nn.Module) :
-	"""
-	A mixin class to attach loss functions to layer. This is usefull when doing variational inference with deep learning.
-	"""
+
 	
-	def __init__(self, *args, **kwargs) :
-		super().__init__(*args, **kwargs)
-		
-		self._internalLosses = []
-		self.lossScaleFactor = 1
-		
-	def addLoss(self, func) :
-		self._internalLosses.append(func)
-		
-	def evalLosses(self) :
-		t_loss = 0
-		
-		for l in self._internalLosses :
-			t_loss = t_loss + l(self)
-			
-		return t_loss
-	
-	def evalAllLosses(self) :
+""" 	def evalAllLosses(self) :
 		
 		t_loss = self.evalLosses()*self.lossScaleFactor
 		
@@ -218,143 +174,10 @@ class VIModule(nn.Module) :
 			if isinstance(m, VIModule) :
 				t_loss = t_loss + m.evalAllLosses()*self.lossScaleFactor
 				
-		return t_loss
-
-
-class MeanFieldGaussianFeedForward(VIModule) :
-	"""
-	A feed forward layer with a Gaussian prior distribution and a Gaussian variational posterior.
-	"""
-	
-	def __init__(self, 
-			  in_features, 
-			  out_features, 
-			  bias = True,  
-			  groups=1, 
-			  weightPriorMean = 0, 
-			  weightPriorSigma = 1.,
-			  biasPriorMean = 0, 
-			  biasPriorSigma = 1.,
-			  initMeanZero = False,
-			  initBiasMeanZero = False,
-			  initPriorSigmaScale = 0.01) :
-		
-		
-		super(MeanFieldGaussianFeedForward, self).__init__()
-		
-		self.samples = {'weights' : None, 'bias' : None, 'wNoiseState' : None, 'bNoiseState' : None}
-		
-		self.in_features = in_features
-		self.out_features = out_features
-		self.has_bias = bias
-		#Gaussian Distribution Parameters
-		self.weights_mean = Parameter((0. if initMeanZero else 1.)*(torch.rand(out_features, int(in_features/groups))-0.5)) #Values between -.5 and .5
-		self.lweights_sigma = Parameter(torch.log(initPriorSigmaScale*weightPriorSigma*torch.ones(out_features, int(in_features/groups))))
-		#Noise	- probably $\varepsilon$ in BBP
-		self.noiseSourceWeights = Normal(torch.zeros(out_features, int(in_features/groups)), 
-								   torch.ones(out_features, int(in_features/groups)))
 		#Adding to Loss function
 		self.addLoss(lambda s : 0.5*s.getSampledWeights().pow(2).sum()/weightPriorSigma**2)
 		self.addLoss(lambda s : -self.out_features/2*np.log(2*np.pi) - 0.5*s.samples['wNoiseState'].pow(2).sum() - s.lweights_sigma.sum())
-	
-		
-		#The same for bias
-		if self.has_bias :
-			self.bias_mean = Parameter((0. if initBiasMeanZero else 1.)*(torch.rand(out_features)-0.5))
-			self.lbias_sigma = Parameter(torch.log(initPriorSigmaScale*biasPriorSigma*torch.ones(out_features)))
-			
-			self.noiseSourceBias = Normal(torch.zeros(out_features), torch.ones(out_features))
-			
+
 			self.addLoss(lambda s : 0.5*s.getSampledBias().pow(2).sum()/biasPriorSigma**2)##
-			self.addLoss(lambda s : -self.out_features/2*np.log(2*np.pi) - 0.5*s.samples['bNoiseState'].pow(2).sum() - self.lbias_sigma.sum())
-			
-			
-	def sampleTransform(self, stochastic=True) :
-		#draws a random sample and some random noise 
-		self.samples['wNoiseState'] = self.noiseSourceWeights.sample().to(device=self.weights_mean.device)
-		self.samples['weights'] = self.weights_mean + (torch.exp(self.lweights_sigma)*self.samples['wNoiseState'] if stochastic else 0)
-		
-		if self.has_bias :
-			self.samples['bNoiseState'] = self.noiseSourceBias.sample().to(device=self.bias_mean.device)
-			self.samples['bias'] = self.bias_mean + (torch.exp(self.lbias_sigma)*self.samples['bNoiseState'] if stochastic else 0)
-		
-	def getSampledWeights(self) :
-		return self.samples['weights']
+			self.addLoss(lambda s : -self.out_features/2*np.log(2*np.pi) - 0.5*s.samples['bNoiseState'].pow(2).sum() - self.lbias_sigma.sum()) """
 	
-	def getSampledBias(self) :
-		return self.samples['bias']
-	
-	def forward(self, x, stochastic=True) :
-		
-		self.sampleTransform(stochastic=stochastic)
-		
-		return nn.functional.linear(x, self.samples['weights'], bias = self.samples['bias'] if self.has_bias else None)
-
-
-#My own which does work 
-class LinearBayes(nn.Module):
-    """
-    Implementation of a linear layer with Bayesian weights.
-    Only accepts matrices with fitting dimensions or scalar values
-
-    """
-    def __init__(self, n_in, n_out, mu_w_init=0,rho_w_prior=1, mu_b_prior=0, rho_b_prior=0):
-        super(LinearBayes, self).__init__()
-        if not torch.is_tensor(mu_w_init):
-            mu_w_init = mu_w_init + torch.rand(n_out, n_in) - 0.5
-        if not torch.is_tensor(rho_w_prior):
-            rho_w_prior = rho_w_prior*torch.ones(n_out,n_in)
-        if  not torch.is_tensor(mu_b_prior):
-            mu_b_prior = mu_b_prior + torch.rand(n_out,1)
-        else:
-            mu_b_prior = torch.reshape(mu_b_prior,(n_out,1))
-        if not torch.is_tensor(rho_b_prior):
-            rho_b_prior = rho_b_prior*torch.ones(n_out,1)
-
-        #Weights
-        self.mu_w = nn.Parameter(mu_w_init)
-        self.sigma_w = nn.Parameter(rho_w_prior)
-        self.eps_w = dist.normal.Normal(torch.zeros(n_out,n_in), torch.ones(n_out,n_in))
-        
-        #Bias
-        self.mu_b = nn.Parameter(mu_b_prior)
-        self.sigma_b = nn.Parameter(rho_b_prior)
-        self.eps_b = dist.normal.Normal(torch.zeros(n_out,1), torch.ones(n_out,1))
-
-        self.weights = None #One could also init with something
-        self.bias = None 
-
-    def sample(self, stochastic=True):
-        self.weights = self.mu_w + (torch.exp(self.sigma_w) * self.eps_w.sample() if stochastic else 0)
-        self.bias = self.mu_b + (torch.exp(self.sigma_b)*self.eps_b.sample() if stochastic else 0)
-
-
-    def sort_bias(self,previous_weight):
-        # Sort the weights if previous layer was shuffled
-        self.mu_w.data = self.mu_w.data[:,previous_weight]
-        self.sigma_w.data = self.sigma_w.data[:,previous_weight]
-
-        # Sort the bias vector in descending order
-        sorted_bias, sorted_indices = torch.sort(self.mu_b, descending=True)
-        self.mu_b.data = sorted_bias
-
-        # Update the weight matrix to match the sorted bias vector 
-        self.sigma_b.data = self.sigma_b.data[sorted_indices]
-        self.mu_w.data = self.mu_w.data[sorted_indices, :]
-        self.sigma_w.data = self.sigma_w.data[sorted_indices, :]
-        return sorted_indices
-    
-    def kl_divergence_loss(self):
-         '''
-         TODO: This is Bullshit - Do I even need it?
-         '''
-         lhood_w = Normal(self.prior_w,self.prior_sig_w).log_prob(self.weights).sum()
-         lhood_b = Normal(self.prior_b,self.prior_sig_b).log_prob(self.bias).sum()
-
-         return 0
-    
-    def forward(self, x):
-        self.sample()
-        return F.linear(x, self.weights, torch.t(self.bias))
-
-

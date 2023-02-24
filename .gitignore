@@ -1,7 +1,7 @@
 __pycache__/
 *.fig
 *.svg
-# *.pdf
+*.pdf
 *.synctex.gz
 *.aux
 *.log

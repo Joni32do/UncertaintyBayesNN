@@ -931,8 +931,6 @@ class FINN_DiffAD2ssBayes(FINN):
                 layers.append(nn.Sigmoid())
         return nn.Sequential(*nn.ModuleList(layers))
         
-    def sort_bias(self):
-        self.func_r
 
     def flux_kernel(self, t, u):
         """
