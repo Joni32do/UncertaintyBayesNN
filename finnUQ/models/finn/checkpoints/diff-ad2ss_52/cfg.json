@@ -42,10 +42,10 @@
   "learn_alpha": false
  },
  "results": {
-  "current_epoch": 371,
-  "current_training_error": 2.730575715759187e-06,
-  "lowest_train_error": 2.730575715759187e-06,
-  "current_validation_error": 2.730575715759187e-06,
-  "lowest_validation_error": 2.730575715759187e-06
+  "current_epoch": 373,
+  "current_training_error": 2.730268988671014e-06,
+  "lowest_train_error": 2.730268988671014e-06,
+  "current_validation_error": 2.730268988671014e-06,
+  "lowest_validation_error": 2.730268988671014e-06
  }
 }
