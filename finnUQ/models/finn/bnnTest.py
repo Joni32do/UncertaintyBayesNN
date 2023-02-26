@@ -10,69 +10,17 @@ import time
 from pathlib import Path
 import matplotlib.pyplot as plt
 
+from bnnNet import BayesianNet
+
+'''
+Testframework
+
+Doesn't really mind to much about Exception handeling and other because it 
+anyways is only a product of time
+
+'''
 
 np.random.seed(42)
-
-class BayesianNet(nn.Module):
-    def __init__(self, arc=[1,10,1], bayes_factor = 0, bayes_arc = None):
-        super(BayesianNet, self).__init__()
-        '''
-        Generates a fully Bayesian network  
-        
-        Required arguments:
-            - architecture: _arc_
-        
-        Optional arguments:
-            - bayes_factor: Can be used to adjust how much percent of each layer is bayesian
-                    o   Either takes value between 0 < bayes_factor < 1
-                    o   Or integer numbers from 0 to n_out which indicate how many neurons have zero_variance
-                    o   If it has value -1 nn.Linear is used
-                    Admittingly a bit overused
-            
-            - bayes_arc: Bayes architecture 
-                    o   Directly invoke zero_variance each layer 
-        
-        
-        '''
-        self.arc=arc
-        self.layers_num = len(arc)
-        
-        if bayes_arc is None:
-            bayes_arc = np.ones(len(arc)) * bayes_factor 
-            print(bayes_arc)
-
-
-
-        layers = []
-        for i in range(self.layers_num-1):
-            layers.append(LinearBayes(arc[i],arc[i+1],
-                            rho_w_prior = -5, rho_b_prior = -5, 
-                            bayes_factor = bayes_arc[i+1], pretrain=True))
-                
-        self.layers = nn.ModuleList(layers)
-
-
-    def sort_bias(self):
-        previous_sort = torch.arange(0,self.arc[0]) #first sort is the identity
-        for layer in self.layers:
-            previous_sort = layer.sort_bias(previous_sort)
-
-    def set_pretrain(self, pretrain):
-        for layer in self.layers:
-            layer.pretrain = pretrain
-
-    def forward(self, x):
-        
-        for idx, layer in enumerate(self.layers):
-            if idx < self.layers_num - 2: 
-                x = torch.tanh(layer(x))
-            else: #last layer
-                x = layer(x)
-
-        return x
-    
-
-
 
 
 def generate_data(n, std = 0.001, x_min = -1 , x_max = 1):
@@ -84,9 +32,14 @@ def generate_data(n, std = 0.001, x_min = -1 , x_max = 1):
 
 
 def train_net(net, epochs, x_train, y_train, pretrain_epochs = 0, sort = False):
+    '''
+    Trains a Bayesian network (def line 16)
+        - lr = 0.001
+    '''
+    
     # Define the loss function and optimizer
     criterion = nn.MSELoss()
-    optimizer = torch.optim.Adam(net.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(net.parameters(), lr=0.01)
     net.set_pretrain(True)
 
     def closure():
@@ -96,14 +49,17 @@ def train_net(net, epochs, x_train, y_train, pretrain_epochs = 0, sort = False):
         output = net(x_train)
         
         # Compute the loss
-        loss = criterion(output, y_train)
+        mse_loss = criterion(output, y_train)
+        
         # Compute the KL divergence loss for the Bayesian self.layers TODO:
-        # kl_divergence_loss = net.layer1.compute_kl_divergence_loss() + net.layer2.compute_kl_divergence_loss()
+        kl_weight = 0.0
+        kl_divergence_loss = net.kl_loss(kl_weight)
 
         # Backward pass
+        loss = mse_loss + kl_divergence_loss
         loss.backward()
         # (loss + kl_divergence_loss).backward()
-        return loss.item()
+        return mse_loss.item()
 
 
 
@@ -123,6 +79,9 @@ def train_net(net, epochs, x_train, y_train, pretrain_epochs = 0, sort = False):
         # Print the loss every 100 epochs
         if (epoch + 1) % 100 == 0:
             print(f"Epoch {epoch + 1}: Loss = {mse:.4f}")
+
+            # for m in net.layers:
+            #     print(m.rho_w)
 
 
     return mse
@@ -190,7 +149,7 @@ if __name__ == '__main__':
     epochs = 1000
     
     #Extras
-    pretrain_epochs = 0
+    pretrain_epochs = 5
     sort = True
 
     #Evaluation BNN
@@ -204,15 +163,16 @@ if __name__ == '__main__':
 
 
     #Architectures
-    architectures =  [[1, 10, 1], #96
+    architectures =  [[1, 10, 10, 1], #96
                       [1, 8, 8, 1], #97
                       [1, 4, 9, 4, 1], #97
                       [1, 8, 4, 8, 1]] #98
     
     #Bayes Architectur
 
-    #Vertical (or even complete flexibility)
-    bayes_arc =      [[0, 5, 0], 
+    #Vertical (or even complete flexibility)^
+    #Either proportional or count Neurons (Special case 1 means all)
+    bayes_arc =      [[0, 0, 0, 1], 
                       [0, 0, 8, 0], 
                       [0, 0, 9, 0, 0], 
                       [0, 0, 4, 0, 0]] 

@@ -14,8 +14,17 @@ from torch.nn.parameter import Parameter
 #My own which does work 
 class LinearBayes(nn.Module):
     """
-    Implementation of a linear layer with Bayesian weights.
-    Only accepts matrices with fitting dimensions or scalar values
+    Implementation of a Bayesian linear layer with Variational Inference (VI)
+    Requires:
+        - Input size (n_in)
+        - Output size (n_out)
+        - Initial values for weights and biases with:
+   
+            - matrices with fitting dimensions (e.g. from a pretrained linear model)
+            - scalar values
+
+            - mu is mean value
+            - rho is related to std with sigma = log(1 + e^{\rho})
 
     """
     def __init__(self, n_in, n_out, mu_w_prior=0,rho_w_prior=-1, mu_b_prior=0, rho_b_prior=-1, 
@@ -23,21 +32,21 @@ class LinearBayes(nn.Module):
         
         super(LinearBayes, self).__init__()
         
-        #Sparse Bayesian#
-
-        #Proportional to Bayes (special case: If you only want one neuron to be Bayes you must do it by 1/n_out)
+        ###Sparse Bayesian
+        #Proportional to Bayes (special case: 1 Neuron ->  1/n_out [1 is understood as fully bayesian])
         if bayes_factor <= 1:
             bayes_factor = int(bayes_factor * n_out)
-
         #Neurons
         self.is_bayes = torch.zeros(n_out,1)
         if bayes_factor != 0:
              self.is_bayes[:int(bayes_factor)] = 1
 
+
         #Mode
         self.pretrain = pretrain
         
         #Additional support for scalar initialization
+        #   Better: reset parameters ...
         if not torch.is_tensor(mu_w_prior):
             mu_w_prior = mu_w_prior + torch.rand(n_out, n_in) - 0.5
         if not torch.is_tensor(rho_w_prior):
@@ -47,8 +56,14 @@ class LinearBayes(nn.Module):
         if not torch.is_tensor(rho_b_prior):
             rho_b_prior = rho_b_prior*torch.ones(n_out)
 
+        #Size
         self.n_in = n_in
         self.n_out = n_out
+
+        #Priors
+        self.prior_mu = mu_w_prior
+        self.prior_sigma = torch.log(1+torch.exp(rho_w_prior))
+
 
         #Weights
         self.mu_w = nn.Parameter(mu_w_prior)
@@ -58,35 +73,29 @@ class LinearBayes(nn.Module):
         self.mu_b = nn.Parameter(mu_b_prior)
         self.rho_b = nn.Parameter(rho_b_prior)
         self.bias = None    
+
+        #Noise
+        self.noise_w = Normal(torch.zeros_like(self.mu_w), torch.ones_like(self.mu_w))
+        self.noise_b = Normal(torch.zeros_like(self.mu_b), torch.ones_like(self.mu_b))
          
 
     def sample(self, stochastic = True):
-        if stochastic:
-             noise_w = Normal(torch.zeros_like(self.mu_w), torch.ones_like(self.mu_w))
-             noise_b = Normal(torch.zeros_like(self.mu_b), torch.ones_like(self.mu_b))
-             
-             print(self.mu_b.data)
-             print(self.rho_b.data)
-             print(self.mu_w.data)
-             print(self.rho_w.data)
-             self.weights = self.mu_w  + torch.exp(self.rho_w) * noise_w.sample() * self.is_bayes
-             self.bias = self.mu_b + torch.exp(self.rho_b) * noise_b.sample() * self.is_bayes.squeeze()
-             print(self.weights)
-             print(self.bias)
+        '''
+        Samples from the neurons where is_bayes
+        '''
+        self.weights = self.mu_w  + (torch.log(1 + torch.exp(self.rho_w)) * self.noise_w.sample() 
+                                     * self.is_bayes if stochastic else 0)
+        self.bias = self.mu_b + (torch.log( 1 + torch.exp(self.rho_b)) * self.noise_b.sample() 
+                                 * self.is_bayes.squeeze() if stochastic else 0)
 
-
-        else:
-            self.weights = self.mu_w
-            self.bias = self.mu_b
 
     def sort_bias(self,previous_weight):
-        # print("Before Sort:")
-        # print(self.mu_b.data)
-        # print(self.rho_b.data)
-        # print(self.mu_w.data)
-        # print(self.rho_w.data)
-        # print(self.is_bayes)
-
+        '''
+        Sorts the parameters according to the bias
+            - previous_weight: Shuffeling from previous layer propogates
+        
+            #TODO: In reality only few sorts happen, maybe change this
+        '''
         # Sort the weights if previous layer was shuffled
         self.mu_w.data = self.mu_w.data[:,previous_weight]
         self.rho_w.data = self.rho_w.data[:,previous_weight]
@@ -103,28 +112,32 @@ class LinearBayes(nn.Module):
         self.rho_w.data = self.rho_w.data[sorted_indices, :]
         #Sort is_bayes
         self.is_bayes = self.is_bayes[sorted_indices]
-        # print("Sort indicies")
-        # print(previous_weight)
-        # print(sorted_indices)
-        # print("After Sort:")
-        # print(self.mu_b.data)
-        # print(self.rho_b.data)
-        # print(self.mu_w.data)
-        # print(self.rho_w.data)
-        # print(self.is_bayes)
-
-
-
+        
         return sorted_indices
   
-    def kl_divergence_loss(self):
-         '''
-         TODO: This is Bullshit - Do I even need it?
-         '''
-         lhood_w = Normal(self.prior_w,self.prior_sig_w).log_prob(self.weights).sum()
-         lhood_b = Normal(self.prior_b,self.prior_sig_b).log_prob(self.bias).sum()
+    def kl_loss(self, kl_weight):
+        '''
+        Evaluates the Kullback-Leibler divergence loss
 
-         return 0
+        TODO:
+        !But does it?
+
+        I think I only should penalize if sigma is to low
+
+        '''
+        # lhood_w = Normal(self.prior_w,self.prior_sig_w).log_prob(self.weights).sum()
+        # lhood_b = Normal(self.prior_b,self.prior_sig_b).log_prob(self.bias).sum()
+        loss = 0
+        #Weights
+        loss += 0.5*self.weights.pow(2).sum()/(self.prior_mu**2).sum()
+        loss -= 0.5 * (self.n_out *np.log(2*np.pi) + self.noise_w.sample().pow(2).sum()) - self.rho_w.sum()
+
+        #Bias
+        loss += 0.5*self.bias.pow(2).sum()/(self.prior_mu**2).sum()
+        loss -= 0.5 * (self.n_out *np.log(2*np.pi) + self.noise_b.sample().pow(2).sum()) - self.rho_w.sum()
+
+
+        return loss * kl_weight
     
     def forward(self, x):
         if self.pretrain:
@@ -147,6 +160,7 @@ class LinearBayes(nn.Module):
      
         
 """     def sample_weights(self):
+self.prior = torch.distributions.Normal(0, prior_var)
         This functionality is implemented here in order to assure
         that the weights are sampled before any time forward propagation
         
@@ -192,3 +206,21 @@ class LinearBayes(nn.Module):
 			self.addLoss(lambda s : 0.5*s.getSampledBias().pow(2).sum()/biasPriorSigma**2)##
 			self.addLoss(lambda s : -self.out_features/2*np.log(2*np.pi) - 0.5*s.samples['bNoiseState'].pow(2).sum() - self.lbias_sigma.sum()) """
 	
+'''
+        print("Before Sort:")
+        print(self.mu_b.data)
+        print(self.rho_b.data)
+        print(self.mu_w.data)
+        print(self.rho_w.data)
+        print(self.is_bayes)
+        print("Sort indicies")
+        print(previous_weight)
+        print(sorted_indices)
+        print("After Sort:")
+        print(self.mu_b.data)
+        print(self.rho_b.data)
+        print(self.mu_w.data)
+        print(self.rho_w.data)
+        print(self.is_bayes)
+        
+'''

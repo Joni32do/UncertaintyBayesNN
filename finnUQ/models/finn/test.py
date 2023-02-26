@@ -39,10 +39,11 @@ def run_testing(print_progress=False, visualize=False, model_number=None):
     config = Configuration("config.json")
     
     # Append the model number to the name of the model
-    if model_number is None:
-        model_number = config.model.number
+    model_number = config.model.number if model_number is None else model_number
     config.model.name = config.model.name + "_" + str(model_number).zfill(2)
-
+    root_path = os.path.abspath("../../data")
+    data_path = os.path.join(root_path, config.data.type, config.data.name)
+    
     # Print some information to console
     print("Model name:", config.model.name)
 
@@ -52,8 +53,7 @@ def run_testing(print_progress=False, visualize=False, model_number=None):
         os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
         os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
-    root_path = os.path.abspath("../../data")
-    data_path = os.path.join(root_path, config.data.type, config.data.name)
+    
     
     # Set device on GPU if specified in the configuration file, else CPU
     device = th.device(config.general.device)
@@ -97,6 +97,7 @@ def run_testing(print_progress=False, visualize=False, model_number=None):
         # #adds noice with mu = 0, std = data.noise
         # #for all rows apart from the first one
         # # 1 to last in all dimensions
+        #TODO: Add noise
         u[1:] = u[1:] + th.normal(th.zeros_like(u[1:]),
                                     th.ones_like(u[1:])*config.data.noise)
 
@@ -113,14 +114,14 @@ def run_testing(print_progress=False, visualize=False, model_number=None):
             layer_sizes=config.model.layer_sizes,
             device=device,
             mode="train",
-            learn_coeff=False,
-            learn_f=False,
-            learn_f_hyd=False,
-            learn_g_hyd=False,
-            learn_r_hyd=True,
-            learn_k_d=False,
-            learn_beta=False,
-            learn_alpha=False,
+            learn_coeff=config.learn.learn_coeff,
+            learn_f=config.learn.learn_f,
+            learn_f_hyd=config.learn.learn_f_hyd,
+            learn_g_hyd=config.learn.learn_g_hyd,
+            learn_r_hyd=config.learn.learn_r_hyd,
+            learn_k_d=config.learn.learn_k_d,
+            learn_beta=config.learn.learn_beta,
+            learn_alpha=config.learn.learn_alpha,
             t_steps=len(t),
             rho_s=np.array(params.rho_s),
             f=np.array(params.f),
@@ -151,14 +152,14 @@ def run_testing(print_progress=False, visualize=False, model_number=None):
                 layer_sizes=config.model.layer_sizes,
                 device=device,
                 mode="train",
-                learn_coeff=False,
-                learn_f=False,
-                learn_f_hyd=False,
-                learn_g_hyd=False,
-                learn_r_hyd=True,
-                learn_k_d=False,
-                learn_beta=False,
-                learn_alpha=False,
+                learn_coeff=config.learn.learn_coeff,
+                learn_f=config.learn.learn_f,
+                learn_f_hyd=config.learn.learn_f_hyd,
+                learn_g_hyd=config.learn.learn_g_hyd,
+                learn_r_hyd=config.learn.learn_r_hyd,
+                learn_k_d=config.learn.learn_k_d,
+                learn_beta=config.learn.learn_beta,
+                learn_alpha=config.learn.learn_alpha,
                 t_steps=len(t),
                 rho_s=np.array(params.rho_s),
                 f=np.array(params.f),
