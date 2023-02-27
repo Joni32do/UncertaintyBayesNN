@@ -9,6 +9,7 @@ from typing import Optional
 import numpy as np
 #from torchdiffeq import odeint_adjoint as odeint
 from bnnLayer import LinearBayes
+import bnnNet
 
 
 class FINN(nn.Module):
@@ -790,7 +791,7 @@ class FINN_DiffAD2ssBayes(FINN):
                  n_e_sand:Optional[np.ndarray]=None, x_start_soil:Optional[int]=None, 
                  x_stop_soil:Optional[int]=None, alpha_l_sand:Optional[np.ndarray]=None,
                  v_e_sand:Optional[np.ndarray]=None, mode="train", config=None, learn_coeff=True, learn_stencil=False, 
-                 bias=True, sigmoid=True):
+                 bias=True, sigmoid=True, bayes_factor = 0, bayes_arc=None):
         """Constructor of FINN_AD2ss class
 
         Args:
@@ -907,13 +908,19 @@ class FINN_DiffAD2ssBayes(FINN):
             self.alpha_l_sand = th.tensor(alpha_l_sand, dtype=th.double, device=self.device)
             self.v_e_sand = th.tensor(v_e_sand, dtype=th.double, device=self.device)
 
-
+        #BNN specific
+        self.bayes_factor = bayes_factor
+        self.bayes_arc = bayes_arc
 
     def function_learner(self):
         """
         This function constructs a feedforward NN required for calculation
         of constitutive function (or flux multiplier) as a function of u.
         """
+        return bnnNet(self.layer_sizes,self.bayes_factor, self.bayes_arc)
+        
+        '''
+        
         layers = list()
         
         for layer_idx in range(len(self.layer_sizes) - 1):
@@ -930,6 +937,7 @@ class FINN_DiffAD2ssBayes(FINN):
                 # (all outputs have the same sign)
                 layers.append(nn.Sigmoid())
         return nn.Sequential(*nn.ModuleList(layers))
+        '''
         
 
     def flux_kernel(self, t, u):
@@ -984,7 +992,7 @@ class FINN_DiffAD2ssBayes(FINN):
             
             # If training with dummy parameter, uncomment needed, since at least
             # one parameter has to be added to computational graph
-            #v_sand_min = -th.relu(-v_sand) + self.z
+            # v_sand_min = -th.relu(-v_sand) + self.z
             
             # remains always zero since v_sand > 0
             v_sand_min = -th.relu(-v_sand)

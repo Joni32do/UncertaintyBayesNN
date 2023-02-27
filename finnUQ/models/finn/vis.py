@@ -41,7 +41,7 @@ def __add_fig(fig, ax, row:float, column:float, title:str, value:np.ndarray,
         t (np.ndarray): _description_
     """
     font_size = 12
-    h = ax[row, column].imshow(value, interpolation='nearest', 
+    h = ax[row, column].imshow(value, cmap = 'cividis', interpolation='nearest', 
                     extent=[t.min(), t.max(),
                             x.min(), x.max()],
                     origin='upper', aspect='auto')
@@ -101,7 +101,7 @@ def vis_FD_NN(model, u_FD:np.ndarray, u_NN:np.ndarray,
 
     plt.show()
 
-def vis_diff(model, u_FD:np.ndarray, u_NN:np.ndarray, t:np.ndarray, x:np.ndarray, config_NN:Configuration):
+def vis_diff(model, u_FD:np.ndarray, u_NN:np.ndarray, t:np.ndarray, x:np.ndarray, config_NN:Configuration, squared:bool = False):
     """calculates difference of u_NN and u_FD solution
 
     Args:
@@ -111,15 +111,31 @@ def vis_diff(model, u_FD:np.ndarray, u_NN:np.ndarray, t:np.ndarray, x:np.ndarray
         t (np.ndarray): _description_
         x (np.ndarray): _description_
     """
-    diff_c = u_FD[...,0] - u_NN[...,0]
-    diff_sk = u_FD[...,1] - u_NN[...,1]
+    if squared:
+        diff_c = (u_FD[...,0] - u_NN[...,0])**2
+        diff_sk = (u_FD[...,1] - u_NN[...,1])**2
+    else:
+        diff_c = u_FD[...,0] - u_NN[...,0]
+        diff_sk = u_FD[...,1] - u_NN[...,1]
 
     fig, ax = plt.subplots(1,2)
     ax = np.expand_dims(ax, axis=0)
     # print(ax.shape)
-    __add_fig(fig=fig, ax=ax, row=0, column=0, title=r"$c_{FD} - c_{FINN} \left[\frac{\mu g}{cm^3}\right]$",
+    
+
+    #Generate titles for plots
+    title_c = r"$(c_{FD} - c_{FINN})"
+    title_s = r"$(s_{k, FD} - s_{k, FINN})"
+    if squared:
+        title_c += "^2 "
+        title_s += "^2 "
+    title_c += r"\left[\frac{\mu g}{cm^3}\right]$"
+    title_s += r"\left[\frac{\mu g}{g}\right]$"
+           
+
+    __add_fig(fig=fig, ax=ax, row=0, column=0, title= title_c,
         value=diff_c, x=x, t=t)
-    __add_fig(fig=fig, ax=ax, row=0, column=1, title=r"$s_{k, FD} - s_{k, FINN} \left[\frac{\mu g}{g}\right]$",
+    __add_fig(fig=fig, ax=ax, row=0, column=1, title= title_s,
         value=diff_sk, x=x, t=t)
     plt.show()
 
@@ -179,7 +195,7 @@ def vis_sorption_isotherms(model, u, u_hat, t, x, config_NN:Configuration):
 def vis_data(number):
 
     # load NN params
-    params_NN = Configuration(f"results/{number}/params_NN.json")
+    # params_NN = Configuration(f"results/{number}/params_NN.json") TODO: Sind die nicht immer gleich
     params_FD = Configuration(f"results/{number}/init_params.json")
     config_NN = Configuration(f"results/{number}/config_NN.json")
 
@@ -190,10 +206,11 @@ def vis_data(number):
     print(model.__dict__)
     vis_FD_NN(model, u, u_NN, t, x, config_NN)
     vis_diff(model, u, u_NN, t, x, config_NN)
+    vis_diff(model, u, u_NN, t, x, config_NN, squared = True)
     vis_btc(model, u, u_NN, t, x, config_NN)
-    vis_sorption_isotherms(model, u, u_NN, t, x, config_NN)
+    # vis_sorption_isotherms(model, u, u_NN, t, x, config_NN)
 
 
 if __name__ == "__main__":
 
-    vis_data(number=61)
+    vis_data(number=55)

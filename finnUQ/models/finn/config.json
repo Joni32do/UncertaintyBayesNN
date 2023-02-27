@@ -7,10 +7,10 @@
 	
 	"training": {
 		   "save_model": true,
-		   "pretrain": false,
 		   "continue_training": false,
-		   "epochs": 200,
-		   "learning_rate": 0.01
+		   "epochs": 500,
+		   "pretrain_epochs": 100,
+		   "learning_rate": 0.004
 	},
 	
 	"data": {
@@ -21,10 +21,10 @@
 	
 	"model": {
 		   "name": "diff-ad2ss",
-		   "number": 55,
+		   "number": 52,
 		   "bayes": false,
 		   "sort": false,
-		   "layer_sizes": [2,5,1
+		   "layer_sizes": [2,100,100,1
 		//    2,
 		//    20,
 		//    40,
@@ -36,7 +36,17 @@
 		   "c_out": false,
 		   "loss_calc_c_out": "MSE",
 		   "sk_end": false,
-		   "synth": true
+		   "synth": true,
+		   "learn_coeff": false,
+		   "learn_f": true,
+		   "learn_f_hyd":false,
+           "learn_g_hyd":false,
+           "learn_r_hyd":false,
+           "learn_k_d":false,
+           "learn_beta":false,
+           "learn_alpha":false
+
+
 	}
    }
    
