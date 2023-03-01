@@ -13,6 +13,7 @@ import time
 from threading import Thread
 
 import numpy as np
+import pandas as pd
 import torch as th
 import torch.nn as nn
 from finn import *
@@ -118,8 +119,94 @@ def run_training(print_progress=True, model_number=None):
         # If parameters learned: initial guesses defined in init_params.json
         params = Configuration(os.path.join("results",str(config.model.number),"init_params.json"))
 
+        # Interpolation of experimental data
+        if config.data.name == "data_exp":
+            df = pd.read_excel("../../data/diffusion_ad2ss/data_exp/220613_ColumnExperiments_Data_N1.xlsx", "N1", skiprows=9, nrows=40, usecols="B:U")
+
+            # select experimental PFOS row
+            exp_conc = df.iloc[[20]].to_numpy(dtype=np.float32).squeeze()
+
+            # ng/L -> mug/L -> mug/cm^3
+            exp_conc = exp_conc/1000000
+
+            # c(t=0, x) = 0 \forall x in \Omega_x 
+            exp_conc = np.insert(exp_conc, 0, 0)
+
+            # select experimental measure points
+            exp_t = df.iloc[[35]].to_numpy(dtype=np.float32).squeeze()
+ 
+            # insert t=0
+            exp_t = np.insert(exp_t, 0, 0)
+
+            ### Süß
+            # average concentrations -> shift to middle value of times
+            exp_mean_t = []
+            for i in range(0,len(exp_t)):
+                if i == 0:
+                    exp_mean_t.append(exp_t[i])
+                else:
+                    exp_mean_t.append((exp_t[i] + exp_t[i-1])/2) 
+            
+            # create time discretization vector
+            t = np.linspace(exp_mean_t[0], params.T_MAX, num=params.T_STEPS, dtype=np.float32)
+            
+          
+            # Interpolation of experimental data points
+            #sample_exp = np.interp(t, exp_mean_t, exp_conc)
+            
+            # get indices of time where experimental data is available
+            loss_indices = []
+            for meas_point in exp_mean_t:
+                for i in range(len(t)):
+                    if np.abs(t[i]-meas_point) <= 0.01:
+                        loss_indices.append(i)
+                        break
+            
+            # visualize exp data
+            #fig, ax = plt.subplots()
+            #ax.plot(new_t, new_exp, label = "Interpolation")
+            #ax.scatter(exp_t, exp_conc, color="y", label="Original times")
+            #ax.scatter(exp_mean_t, exp_conc, color="r", label="Averaged times")
+            #print(type(exp_conc))
+            #np.set_printoptions(suppress=True)
+            #print(exp_conc)
+            #ax.set_xlabel(r'$t [d]$', fontsize=17)
+            #ax.set_ylabel(r'conc PFOS $\left[\frac{\mu g}{cm^3}\right]$', fontsize=17)
+            #ax.set_title('Experimental BTC', fontsize=17)
+            #ax.tick_params(axis='x', labelsize=17)
+            #ax.tick_params(axis='y', labelsize=17)
+            #ax.set_yscale("log")
+            #ax.legend()
+            #plt.savefig("exp_data")
+
+            # "upscale" to sizes required by FINN
+            sample_c = th.zeros((params.X_STEPS, params.T_STEPS), dtype=th.float32)
+            sample_sk = th.zeros((params.X_STEPS, params.T_STEPS), dtype=th.float32)
+            # add initial conditions
+            init_conc = th.zeros(params.X_STEPS)
+            init_conc[params.sand.top:params.sand.bot] = params.init_conc
+            init_sk = th.zeros(params.X_STEPS)
+            init_sk[params.sand.top:params.sand.bot] = params.kin_sorb
+            sample_c[:,0] = init_conc
+            sample_sk[:,0] = init_sk
+
+            # add measured btc points
+            if config.learn.c_out:
+                for i, index in enumerate(loss_indices):
+                    sample_c[-1,index] = exp_conc[i]
+            #sample_c[-1,:] = th.tensor(sample_exp, dtype=th.float).to(device=device)
+            # add measured interp. kin. sorbed
+            if config.learn.sk_end:
+                last_sk = th.zeros(params.X_STEPS)
+                last_sk[params.sand.top:params.sand.bot] = params.kin_sorb_end
+                sample_sk[:,-1]= last_sk
+            
+
+            u = th.stack((sample_c, sample_sk), dim=len(sample_c.shape))
+            t = th.tensor(t, dtype=th.float).to(device=device)
+            dx = params.X_LENGTH/(params.X_STEPS -1)
         #Synthetic data
-        if config.data.name == "data_train":
+        elif config.data.name == "data_train":
             u = np.load(f"results/{config.model.number}/u_FD.npy")
             t = np.load(f"results/{config.model.number}/t_series.npy")
             
@@ -130,7 +217,7 @@ def run_training(print_progress=True, model_number=None):
             # np to pytorch tensors
             u = th.tensor(u, dtype=th.float).to(device=device)
             t = th.tensor(t, dtype=th.float).to(device=device)
-        else:
+        elif config.data.name == "data_ext":
             # use whole synthetic data set for training
             u = th.tensor(np.load(f"results/{config.model.number}/u_FD.npy"),
                           dtype=th.float).to(device=device)

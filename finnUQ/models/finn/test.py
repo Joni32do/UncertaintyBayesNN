@@ -95,7 +95,7 @@ def run_testing(print_progress=False, visualize=False, model_number=None):
         dx = x[1] - x[0]  
             
         # Initialize and set up the model
-        if config.model.bayes:
+        if config.bayes.is_bayes:
             model = FINN_DiffAD2ssBayes(
             u=u,
             D=np.array(params.alpha_l*params.v_e+params.D_e),
@@ -301,41 +301,57 @@ def run_testing(print_progress=False, visualize=False, model_number=None):
 
     # store diffusion-ad2ss data
     if config.data.type == "diffusion_ad2ss":
+
+
         # Forward data through the model
         time_start = time.time()
         with th.no_grad():
-            u_hat = model(t=t, u=u)
-        
-        
-
-
+            u_hat = model(t, u)     
         if print_progress:
             print(f"Forward pass took: {time.time() - time_start} seconds.")
 
 
-        
+
         u_hat = u_hat.detach().cpu()
         u = u.detach().cpu()
         t = t.detach().cpu()
 
-        # plot_tensor(u_hat[:,0,:])
-        # plot_tensor(u[:,0,:])
-
         # Compute error
         criterion = nn.MSELoss()
         mse = criterion(u_hat, u)
-
-
         print(f"MSE: {mse}")
-        with open(f"results/{config.model.number}/model.pkl", "wb") as outp:    
+
+        if config.bayes.is_bayes:
+            mean, median, std, lower, upper = eval_Bayes_finn(model, t, u, config.bayes.runs)
+            mse_bayes = criterion(mean, u)
+            print(f"MSE_Mean:{mse_bayes}")
+        
+
+        #Saving Files
+        path = os.path.join("results",str(config.model.number))
+        with open(os.path.join(path, "model.pkl"), "wb") as outp:    
             pickle.dump(model, outp, pickle.HIGHEST_PROTOCOL)
-        np.save(f"results/{config.model.number}/u_hat", u_hat)
+        np.save(os.path.join(path, "u_hat"), u_hat)
         np.save(f"results/{config.model.number}/u", u)
 
+        if config.bayes.is_bayes:
+            np.save(np.save(os.path.join(path, "mean")), mean)
+            np.save(np.save(os.path.join(path, "median")), median)
+            np.save(np.save(os.path.join(path, "std")), std)
+            np.save(np.save(os.path.join(path, "lower")), lower)
+            np.save(np.save(os.path.join(path, "upper")), upper)
+
+        #TODO: Improve on this fuckery
         # params.save(f"results/{config.model.number}/", filename="params_NN.json")
         config.save(f"results/{config.model.number}/", filename="config_NN.json")
     
 
+
+
+
+    
+        # plot_tensor(u_hat[:,0,:])
+        # plot_tensor(u[:,0,:])
     #Fallunterscheidung ist unnötig    
     else:
         # Initialize the criterion (loss)
@@ -641,11 +657,11 @@ def run_testing(print_progress=False, visualize=False, model_number=None):
     return model
 
 
-def eval_Bayes_net(net, x, n_runs, quantile = 0.05):
+def eval_Bayes_finn(net, t, u, n_runs, quantile = 0.05):
     # Evaluate function using the Bayesian network   
-    y_preds = np.zeros((n_runs,x.size(dim=0)))
+    y_preds = np.zeros((n_runs,u.size(dim=0)))
     for i in range(n_runs):
-        y_preds[i] = net.forward(th.Tensor(x).unsqueeze(1)).detach().numpy().flatten()
+        y_preds[i] = net.forward(t, u).detach().numpy().flatten()
 
     # Calculate mean and quantiles
     mean = np.mean(y_preds, axis=0)

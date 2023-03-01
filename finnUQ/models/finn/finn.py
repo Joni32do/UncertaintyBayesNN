@@ -1109,6 +1109,8 @@ class FINN_DiffAD2ssBayes(FINN):
                 #reduziere auf Zeitabhängiges Verhalten
                 #Retardation is also useless
                 ret = th.ones(self.Nx)
+                print(cw_soil)
+                print(cw_soil.size())
                 ret[self.x_start:self.x_stop] = 1+self.func_r(cw_soil)*(10**self.ret_fac)
                 ret = ret.squeeze(-1)
             

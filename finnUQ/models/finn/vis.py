@@ -86,8 +86,13 @@ def load_data(number:float, config_NN:Configuration):
     return model, u, u_NN, t, x
 
 def load_bayes(number):
-    #TODO:
-    pass
+    path = os.path.join("results", str(number))
+    mean = np.load(os.path.join(path, "mean.npy"))
+    median = np.load(os.path.join(path, "median.npy"))
+    std = np.load(os.path.join(path, "std.npy"))
+    lower = np.load(os.path.join(path, "lower.npy"))
+    upper = np.load(os.path.join(path, "upper.npy"))
+    return mean, median, std, lower, upper
 
 
 def vis_FD_NN(u_FD:np.ndarray, u_NN:np.ndarray,
@@ -182,36 +187,48 @@ def generate_plot_title(squared, log_value):
     title_s += r"\left[\frac{\mu g}{g}\right]$"
     return title_c,title_s
 
-def vis_btc(u, u_hat, t, x, config_NN:Configuration, save_path = None):
-    fig, ax = plt.subplots(1,2)
-    font_size = 22
+def vis_btc(u, u_hat, t, x, save_path = None):
+    font_size = 12
+    fig, ax = plt.subplots(1,1)
 
     # plot BTC
-    ax[0].set_xlabel("t [d]", fontsize=font_size)
-    ax[0].set_ylabel("$c \left[\\frac{\mu g}{cm^3}\\right]$", fontsize=font_size)
-    ax[0].set_title("Conc. of PFOS at outflow", fontsize=font_size)
+    ax.set_xlabel("t [d]", fontsize=font_size)
+    ax.set_ylabel("$c \left[\\frac{\mu g}{cm^3}\\right]$", fontsize=font_size)
+    ax.set_title("Conc. of PFOS at outflow", fontsize=font_size)
     
-    ax[0].plot(t, u[-1,:,0], color="b", label="FD")
-    ax[0].plot(t, u_hat[-1,:,0], color="y", label="FINN")
+    ax.plot(t, u[-1,:,0], color="b", label="FD")
+    ax.plot(t, u_hat[-1,:,0], color="y", label="FINN")
 
-    
-    # plot sk end
-    ax[1].set_xlabel("$s_k \:\left[\\frac{\mu g}{g}\\right]$", fontsize=font_size)
-    ax[1].set_ylabel("$x [cm]$", fontsize=font_size)
-    ax[1].set_title(f"Kin. sorbed conc. of PFOS at t = {t[-1]}d", fontsize=font_size)
-    if config_NN.data.name == "data_ext":
-        ax[1].plot(np.flip(u[:,-1,1]), x, color="b", label="FD")
-    elif config_NN.data.name == "data_exp":
-        ax[1].plot(np.flip(u[:,-1,1]), x, color="b", label="Experimental data")
-    ax[1].plot(np.flip(u_hat[:,-1,1]), x, color="y", label="FINN")
+    ax.legend(fontsize=font_size)
+    plt.locator_params(axis="x", nbins=6)
+    for label in (ax.get_xticklabels() + ax.get_yticklabels()): label.set_fontsize(font_size)
 
-    ax[0].legend(fontsize=font_size)
-    plt.locator_params(axis="x", nbins=6)
-    ax[1].legend(fontsize=font_size)
-    plt.locator_params(axis="x", nbins=6)
-    for label in (ax[0].get_xticklabels() + ax[0].get_yticklabels()): label.set_fontsize(font_size)
-    for label in (ax[1].get_xticklabels() + ax[1].get_yticklabels()): label.set_fontsize(font_size)
     #ax[0].set_yscale("log")
+
+    if save_path is not None:
+        plt.savefig(os.path.join(save_path,"BTC.pdf"))
+    else:
+        plt.show()
+
+def vis_sk_end(u, u_hat, t, x, config_NN, save_path = None):
+    font_size = 12
+    fig, ax = plt.subplots(1,1)
+
+    # plot sk end
+    ax.set_xlabel("$s_k \:\left[\\frac{\mu g}{g}\\right]$", fontsize=font_size)
+    ax.set_ylabel("$x [cm]$", fontsize=font_size)
+    ax.set_title(f"Kin. sorbed conc. of PFOS at t = {t[-1]}d", fontsize=font_size)
+    if config_NN.data.name == "data_ext":
+        ax.plot(np.flip(u[:,-1,1]), x, color="b", label="FD")
+    elif config_NN.data.name == "data_exp":
+        ax.plot(np.flip(u[:,-1,1]), x, color="b", label="Experimental data")
+    ax.plot(np.flip(u_hat[:,-1,1]), x, color="y", label="FINN")
+
+    
+    ax.legend(fontsize=font_size)
+    plt.locator_params(axis="x", nbins=6)
+    for label in (ax[1].get_xticklabels() + ax[1].get_yticklabels()): label.set_fontsize(font_size)
+    
     if save_path is not None:
         plt.savefig(os.path.join(save_path,"BTC.pdf"))
     else:
@@ -252,8 +269,13 @@ if __name__ == "__main__":
     # load NN data
     model, u, u_NN, t, x = load_data(number, config_NN)
     
-    #Save or print
-    save_path = None
+    # load bayes data
+    if config.bayes.is_bayes:
+        # mean, median, std, lower, upper = load_bayes(number)
+        pass
+
+    
+    #Save or print (if path is None)
     save_path = f"./visualize/{number}"
     os.makedirs(save_path, exist_ok=True)
 
@@ -264,10 +286,9 @@ if __name__ == "__main__":
     vis_diff(u, u_NN, t, x, squared = True, save_path = save_path)
     vis_diff(u, u_NN, t, x, squared = True, 
              log_value=True, save_path = save_path)
-    vis_btc(u, u_NN, t, x, config_NN, save_path = save_path)
-    # load bayes data
-    if config.bayes.is_bayes:
-        mean, lower, upper = load_bayes(number)
+    vis_btc( u, u_NN, t, x, save_path = save_path)
+
+    
     
 
 

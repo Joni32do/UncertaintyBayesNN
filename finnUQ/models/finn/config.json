@@ -29,7 +29,8 @@
 		"pretrain_epochs": 1000,
 		"sort": false,
 		"bayes_factor": 0, //Ignored if bayes_sizes is not None
-		"bayes_sizes": [0,0,4,1]
+		"bayes_sizes": [0,0,4,1],
+		"runs": 100
 
 	},
 	"learn": {
