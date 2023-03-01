@@ -253,7 +253,7 @@ def main():
 
     # Create train and ext data
     generate_sample(simulator=simulator,
-                    visualize_data=True,
+            visualize_data=False,
                     save_data=True,
                     train_data=True,
                     root_path=root_path)
