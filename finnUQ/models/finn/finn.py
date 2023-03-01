@@ -9,7 +9,7 @@ from typing import Optional
 import numpy as np
 #from torchdiffeq import odeint_adjoint as odeint
 from bnnLayer import LinearBayes
-import bnnNet
+from bnnNet import BayesianNet
 
 
 class FINN(nn.Module):
@@ -579,7 +579,7 @@ class FINN_DiffAD2ss(FINN):
             
             # If training with dummy parameter, uncomment needed, since at least
             # one parameter has to be added to computational graph
-            #v_sand_min = -th.relu(-v_sand) + self.z
+            # v_sand_min = -th.relu(-v_sand) + self.z
             
             # remains always zero since v_sand > 0
             v_sand_min = -th.relu(-v_sand)
@@ -643,14 +643,17 @@ class FINN_DiffAD2ss(FINN):
             ########################################################
             # USELESS ONLY FOR NICE SCHEME IS ALL ZERO
             # bot boundary fluxes
+            vsx_min = v_sand_min/self.dx
+            vs_min = v_soil_min/self.dx
+
             bot_flux_sand_top = Dsxx *(self.stencil[0]*c[:self.x_start]+self.stencil[1]*c[1:self.x_start+1]) - \
-                                vsx * (self.stencil[0]*c[:self.x_start]+self.stencil[1]*c[1:self.x_start+1])
+                                vsx_min * (self.stencil[0]*c[:self.x_start]+self.stencil[1]*c[1:self.x_start+1])
             
             bot_flux_soil = Dxx *(self.stencil[0]*c[self.x_start:self.x_stop] + self.stencil[1]*c[self.x_start+1:self.x_stop+1]) - \
-                            vx * (self.stencil[0]*c[self.x_start:self.x_stop] + self.stencil[1]*c[self.x_start+1:self.x_stop+1])
+                            vs_min * (self.stencil[0]*c[self.x_start:self.x_stop] + self.stencil[1]*c[self.x_start+1:self.x_stop+1])
             
             bot_flux_sand_bot = Dsxx * (self.stencil[0]*c[self.x_stop:-1]+self.stencil[1]*c[self.x_stop+1:]) - \
-                                 vsx * (self.stencil[0]*c[self.x_stop:-1]+self.stencil[1]*c[self.x_stop+1:])
+                                 vsx_min * (self.stencil[0]*c[self.x_stop:-1]+self.stencil[1]*c[self.x_stop+1:])
             
             bot_bound_flux = th.tensor(0).unsqueeze(0)
 
@@ -697,6 +700,8 @@ class FINN_DiffAD2ss(FINN):
                 t_sk = th.stack((sk_soil, time_vec), dim=1)
                 g_hyd = th.zeros(self.Nx)
                 g_hyd[self.x_start:self.x_stop] = (self.func_g(t_sk.float())*th.abs(self.g_fac))[:,0]
+
+
 
             # Integrate the fluxes at all boundaries of control volumes i
             flux_c = (top_flux + bot_flux+f_hyd*c+g_hyd)/ret
@@ -838,6 +843,11 @@ class FINN_DiffAD2ssBayes(FINN):
         super().__init__(u, D, BC, layer_sizes, device, mode, config, learn_coeff,
                          learn_stencil, bias, sigmoid)
 
+
+        #BNN specific
+        self.bayes_factor = bayes_factor
+        self.bayes_arc = bayes_arc
+
         # potentially learnable parameters
         if not learn_f:
             self.f = th.tensor(f, dtype=th.double, device=self.device)
@@ -908,16 +918,14 @@ class FINN_DiffAD2ssBayes(FINN):
             self.alpha_l_sand = th.tensor(alpha_l_sand, dtype=th.double, device=self.device)
             self.v_e_sand = th.tensor(v_e_sand, dtype=th.double, device=self.device)
 
-        #BNN specific
-        self.bayes_factor = bayes_factor
-        self.bayes_arc = bayes_arc
+        
 
     def function_learner(self):
         """
         This function constructs a feedforward NN required for calculation
         of constitutive function (or flux multiplier) as a function of u.
         """
-        return bnnNet(self.layer_sizes,self.bayes_factor, self.bayes_arc)
+        return BayesianNet(self.layer_sizes,self.bayes_factor, self.bayes_arc)
         
         '''
         
@@ -1026,29 +1034,29 @@ class FINN_DiffAD2ssBayes(FINN):
             top_flux_sand_bot = Dsxx * (self.stencil[0]*c[self.x_stop:]+self.stencil[1]*c[self.x_stop-1:-1]) - \
                                 vsx * (-self.stencil[0]*c[self.x_stop:]-self.stencil[1]*c[self.x_stop-1:-1])
             
-            # Better readability
-            top_bound_flux = (Dsxx*(self.BC[0] -c[0]) + 
-                             vsx *(self.BC[0] - c[0] )).unsqueeze(0)
+            # # Better readability
+            # top_bound_flux = (Dsxx*(self.BC[0] -c[0]) + 
+            #                  vsx *(self.BC[0] - c[0] )).unsqueeze(0)
             
-            top_flux_sand_top = Dsxx*(c[:self.x_start-1] -c[1:self.x_start]) + \
-                                vsx*(c[:self.x_start-1] - c[1:self.x_start])
+            # top_flux_sand_top = Dsxx*(c[:self.x_start-1] -c[1:self.x_start]) + \
+            #                     vsx*(c[:self.x_start-1] - c[1:self.x_start])
             
-            top_flux_soil = Dxx *(c[self.x_start-1:self.x_stop-1] - c[self.x_start:self.x_stop]) + \
-                             vx *(c[self.x_start-1:self.x_stop-1] - c[self.x_start:self.x_stop])
+            # top_flux_soil = Dxx *(c[self.x_start-1:self.x_stop-1] - c[self.x_start:self.x_stop]) + \
+            #                  vx *(c[self.x_start-1:self.x_stop-1] - c[self.x_start:self.x_stop])
             
-            top_flux_sand_bot = Dsxx*(c[self.x_stop-1:-1] - c[self.x_stop:]) + \
-                                vsx *(c[self.x_stop-1:-1] - c[self.x_stop:])
+            # top_flux_sand_bot = Dsxx*(c[self.x_stop-1:-1] - c[self.x_stop:]) + \
+            #                     vsx *(c[self.x_stop-1:-1] - c[self.x_stop:])
             
-            top_flux = th.cat((top_bound_flux, top_flux_sand_top, top_flux_soil, top_flux_sand_bot))
+            # top_flux = th.cat((top_bound_flux, top_flux_sand_top, top_flux_soil, top_flux_sand_bot))
 
-            # even more compact
-            flux_fac_sand = Dsxx+vsx
-            flux_fac_soil = Dxx+vx
+            # # even more compact
+            # flux_fac_sand = Dsxx+vsx
+            # flux_fac_soil = Dxx+vx
 
-            top_bound_flux =   flux_fac_sand*(self.BC[0] -c[0]).unsqueeze(0)
-            top_flux_sand_top =flux_fac_sand*(c[:self.x_start-1] -c[1:self.x_start])            
-            top_flux_soil =    flux_fac_soil*(c[self.x_start-1:self.x_stop-1] - c[self.x_start:self.x_stop])
-            top_flux_sand_bot =flux_fac_sand*(c[self.x_stop-1:-1] - c[self.x_stop:])
+            # top_bound_flux =   flux_fac_sand*(self.BC[0] -c[0]).unsqueeze(0)
+            # top_flux_sand_top =flux_fac_sand*(c[:self.x_start-1] -c[1:self.x_start])            
+            # top_flux_soil =    flux_fac_soil*(c[self.x_start-1:self.x_stop-1] - c[self.x_start:self.x_stop])
+            # top_flux_sand_bot =flux_fac_sand*(c[self.x_stop-1:-1] - c[self.x_stop:])
             
             top_flux = th.cat((top_bound_flux, top_flux_sand_top, top_flux_soil, top_flux_sand_bot))
             
@@ -1094,10 +1102,14 @@ class FINN_DiffAD2ssBayes(FINN):
             else:
                 # According to definitions R(c) >= 1, scaling is needed since potentially
                 # larger output than sigmoid (0 < sig(x) < 1)
-                time_vec = th.ones([self.Nx])*t
-                t_c = th.stack((c, time_vec), dim=1)
-                t_c.unsqueeze(-1)
-                ret = 1+self.func_r(t_c.float())*(10**self.ret_fac)
+                # time_vec = th.ones([self.Nx])*t
+                # t_c = th.stack((c, time_vec), dim=1)
+                # t_c.unsqueeze(-1)
+                #TODO: Hier habe ich noch was hinzu geschrieben - die verschiedene Sand betrachtung hat gefehlt und ich habe
+                #reduziere auf Zeitabhängiges Verhalten
+                #Retardation is also useless
+                ret = th.ones(self.Nx)
+                ret[self.x_start:self.x_stop] = 1+self.func_r(cw_soil)*(10**self.ret_fac)
                 ret = ret.squeeze(-1)
             
             # PHYSICAL INFORMATION:
@@ -1118,6 +1130,7 @@ class FINN_DiffAD2ssBayes(FINN):
             # Calculate sk flux using F, G, and R
             flux_sk=th.zeros(self.Nx)
             flux_sk[self.x_start:self.x_stop] = -f_hyd[self.x_start:self.x_stop]*(self.n_e/self.rho_s)*cw_soil-g_hyd[self.x_start:self.x_stop]*(self.n_e/self.rho_s) 
+            flux_sk[self.x_start:self.x_stop] = -(self.n_e/self.rho_s)*(f_hyd[self.x_start:self.x_stop]*cw_soil + g_hyd[self.x_start:self.x_stop])
             flux = th.stack((flux_c, flux_sk), dim=len(c.size()))
             return flux
 

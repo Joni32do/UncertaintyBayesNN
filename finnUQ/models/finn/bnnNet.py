@@ -6,7 +6,7 @@ from bnnLayer import LinearBayes
 
 
 class BayesianNet(nn.Module):
-    def __init__(self, arc=[1,10,1], bayes_factor = 0, bayes_arc = None):
+    def __init__(self, arc=[1,10,1], bayes_factor = 0, bayes_arc = None, rho = -4):
         super(BayesianNet, self).__init__()
         '''
         Generates a fully Bayesian network  
@@ -23,6 +23,9 @@ class BayesianNet(nn.Module):
             
             - bayes_arc: Bayes architecture 
                     o   Directly invoke zero_variance each layer 
+
+            - rho: Initial variation of params
+                    o TODO: rho_w \neq rho_b
         
         
         '''
@@ -38,7 +41,7 @@ class BayesianNet(nn.Module):
         layers = []
         for i in range(self.layers_num-1):
             layers.append(LinearBayes(arc[i],arc[i+1],
-                            rho_w_prior = -4, rho_b_prior = -4, 
+                            rho_w_prior = rho, rho_b_prior = rho, 
                             bayes_factor = bayes_arc[i+1], pretrain=True))
                 
         self.layers = nn.ModuleList(layers)

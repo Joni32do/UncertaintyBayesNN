@@ -27,7 +27,7 @@ import os
 
 
 def __add_fig(fig, ax, row:float, column:float, title:str, value:np.ndarray, 
-    x:np.ndarray, t:np.ndarray):
+    x:np.ndarray, t:np.ndarray, is_c:bool = False):
     """add subplot to fig
 
     Args:
@@ -41,7 +41,11 @@ def __add_fig(fig, ax, row:float, column:float, title:str, value:np.ndarray,
         t (np.ndarray): _description_
     """
     font_size = 12
-    h = ax[row, column].imshow(value, cmap = 'cividis', interpolation='nearest', 
+    if is_c:
+        cmap = 'RdPu'
+    else:
+        cmap = 'GnBu'
+    h = ax[row, column].imshow(value, cmap = cmap, interpolation='nearest', 
                     extent=[t.min(), t.max(),
                             x.min(), x.max()],
                     origin='upper', aspect='auto')
@@ -58,7 +62,7 @@ def __add_fig(fig, ax, row:float, column:float, title:str, value:np.ndarray,
     for label in (ax[row, column].get_xticklabels() + ax[row, column].get_yticklabels()): 
         label.set_fontsize(font_size)
 
-def init_model(number:float, config_NN:Configuration):
+def load_data(number:float, config_NN:Configuration):
     """Loads selected model
 
     Args:
@@ -81,27 +85,37 @@ def init_model(number:float, config_NN:Configuration):
     x = np.load(f"results/{number}/x_series.npy")
     return model, u, u_NN, t, x
 
-def vis_FD_NN(model, u_FD:np.ndarray, u_NN:np.ndarray,
-    t:np.ndarray, x:np.ndarray, config_NN):
+def load_bayes(number):
+    #TODO:
+    pass
+
+
+def vis_FD_NN(u_FD:np.ndarray, u_NN:np.ndarray,
+    t:np.ndarray, x:np.ndarray, save_path = None):
 
     fig, ax = plt.subplots(2, 2)
 
     
-    title_c = r"FD: $c(t,x) \left[\frac{\mu g}{cm^3}\right]$"
-    title_sk = r"FD: $s_k(t,x) \left[\frac{\mu g}{g}\right]$"
+    title_c = r"$c(t,x) \left[\frac{\mu g}{cm^3}\right]$"
+    title_s = r"$s_k(t,x) \left[\frac{\mu g}{g}\right]$"
     
-    __add_fig(fig=fig, ax=ax, row=0, column=0, title=title_c, 
-        value=u_FD[...,0], x=x, t=t)
-    __add_fig(fig=fig, ax=ax, row=1, column=0, title=title_sk, 
+    __add_fig(fig=fig, ax=ax, row=0, column=0, title=r"FD: " + title_c, 
+        value=u_FD[...,0], x=x, t=t, is_c=True)
+    __add_fig(fig=fig, ax=ax, row=1, column=0, title=r"FD: " + title_s, 
         value=u_FD[...,1], x=x, t=t)
-    __add_fig(fig=fig, ax=ax, row=0, column=1, title=r"FINN: $c(t,x) \left[\frac{\mu g}{cm^3}\right]$", 
-        value=u_NN[...,0], x=x, t=t)
-    __add_fig(fig=fig, ax=ax, row=1, column=1, title=r"FINN: $s_k(t,x) \left[\frac{\mu g}{g}\right]$", 
+    __add_fig(fig=fig, ax=ax, row=0, column=1, title=r"FINN: " +title_c, 
+        value=u_NN[...,0], x=x, t=t, is_c = True)
+    __add_fig(fig=fig, ax=ax, row=1, column=1, title=r"FINN: " +title_s, 
         value=u_NN[...,1], x=x, t=t)
+    
+    if save_path is not None:
+        plt.savefig(os.path.join(save_path,"FD_NN.pdf"))
+    else:
+        plt.show()
 
-    plt.show()
-
-def vis_diff(model, u_FD:np.ndarray, u_NN:np.ndarray, t:np.ndarray, x:np.ndarray, config_NN:Configuration, squared:bool = False):
+def vis_diff(u_FD:np.ndarray, u_NN:np.ndarray, t:np.ndarray, 
+             x:np.ndarray,squared:bool = False, log_value:bool = False,
+             save_path = None):
     """calculates difference of u_NN and u_FD solution
 
     Args:
@@ -110,10 +124,15 @@ def vis_diff(model, u_FD:np.ndarray, u_NN:np.ndarray, t:np.ndarray, x:np.ndarray
         u_NN (np.ndarray): _description_
         t (np.ndarray): _description_
         x (np.ndarray): _description_
+
+    Log value without square is forbidden
     """
     if squared:
         diff_c = (u_FD[...,0] - u_NN[...,0])**2
         diff_sk = (u_FD[...,1] - u_NN[...,1])**2
+        if log_value:
+            diff_c = np.log10(diff_c)
+            diff_sk = np.log10(diff_sk)
     else:
         diff_c = u_FD[...,0] - u_NN[...,0]
         diff_sk = u_FD[...,1] - u_NN[...,1]
@@ -124,22 +143,46 @@ def vis_diff(model, u_FD:np.ndarray, u_NN:np.ndarray, t:np.ndarray, x:np.ndarray
     
 
     #Generate titles for plots
-    title_c = r"$(c_{FD} - c_{FINN})"
-    title_s = r"$(s_{k, FD} - s_{k, FINN})"
-    if squared:
-        title_c += "^2 "
-        title_s += "^2 "
-    title_c += r"\left[\frac{\mu g}{cm^3}\right]$"
-    title_s += r"\left[\frac{\mu g}{g}\right]$"
+    title_c, title_s = generate_plot_title(squared, log_value)
            
 
     __add_fig(fig=fig, ax=ax, row=0, column=0, title= title_c,
         value=diff_c, x=x, t=t)
     __add_fig(fig=fig, ax=ax, row=0, column=1, title= title_s,
         value=diff_sk, x=x, t=t)
-    plt.show()
+    
+    if save_path is not None:
+        name = "Diff"
+        if squared:
+            name += "Sq"
+            if log_value:
+                name += "Log"
+        plt.savefig(os.path.join(save_path,name + ".pdf"))
+    else:
+        plt.show()
 
-def vis_btc(model, u, u_hat, t, x, config_NN:Configuration):
+def generate_plot_title(squared, log_value):
+    title_c = r"$"
+    title_s = r"$"
+    if squared:
+        if log_value:
+            title_c += r"\log("
+            title_s += r"\log("
+        title_c += r"("
+        title_s += r"("
+    title_c += r"c_{FD} - c_{FINN}"
+    title_s += r"s_{k, FD} - s_{k, FINN}"
+    if squared:
+        title_c += r")^2 "
+        title_s += r")^2 "
+        if log_value:
+            title_c += r")"
+            title_s += r")"
+    title_c += r"\left[\frac{\mu g}{cm^3}\right]$"
+    title_s += r"\left[\frac{\mu g}{g}\right]$"
+    return title_c,title_s
+
+def vis_btc(u, u_hat, t, x, config_NN:Configuration, save_path = None):
     fig, ax = plt.subplots(1,2)
     font_size = 22
 
@@ -169,7 +212,10 @@ def vis_btc(model, u, u_hat, t, x, config_NN:Configuration):
     for label in (ax[0].get_xticklabels() + ax[0].get_yticklabels()): label.set_fontsize(font_size)
     for label in (ax[1].get_xticklabels() + ax[1].get_yticklabels()): label.set_fontsize(font_size)
     #ax[0].set_yscale("log")
-    plt.show()
+    if save_path is not None:
+        plt.savefig(os.path.join(save_path,"BTC.pdf"))
+    else:
+        plt.show()
 
 def vis_sorption_isotherms(model, u, u_hat, t, x, config_NN:Configuration):
     font_size = 22
@@ -192,25 +238,38 @@ def vis_sorption_isotherms(model, u, u_hat, t, x, config_NN:Configuration):
     plt.show()
 
 
-def vis_data(number):
 
-    # load NN params
-    # params_NN = Configuration(f"results/{number}/params_NN.json") TODO: Sind die nicht immer gleich
+
+if __name__ == "__main__":
+    config = Configuration("config.json")
+    number = config.model.number
+    
+    # TODO: Hier aufräumen
+    # params_NN = Configuration(f"results/{number}/params_NN.json") 
     params_FD = Configuration(f"results/{number}/init_params.json")
     config_NN = Configuration(f"results/{number}/config_NN.json")
 
     # load NN data
-    model, u, u_NN, t, x = init_model(number, config_NN)
+    model, u, u_NN, t, x = load_data(number, config_NN)
+    
+    #Save or print
+    save_path = None
+    save_path = f"./visualize/{number}"
+    os.makedirs(save_path, exist_ok=True)
 
     # visualize
     print(model.__dict__)
-    vis_FD_NN(model, u, u_NN, t, x, config_NN)
-    vis_diff(model, u, u_NN, t, x, config_NN)
-    vis_diff(model, u, u_NN, t, x, config_NN, squared = True)
-    vis_btc(model, u, u_NN, t, x, config_NN)
+    vis_FD_NN(u, u_NN, t, x, save_path)
+    vis_diff(u, u_NN, t, x, save_path = save_path)
+    vis_diff(u, u_NN, t, x, squared = True, save_path = save_path)
+    vis_diff(u, u_NN, t, x, squared = True, 
+             log_value=True, save_path = save_path)
+    vis_btc(u, u_NN, t, x, config_NN, save_path = save_path)
+    # load bayes data
+    if config.bayes.is_bayes:
+        mean, lower, upper = load_bayes(number)
+    
+
+
+
     # vis_sorption_isotherms(model, u, u_NN, t, x, config_NN)
-
-
-if __name__ == "__main__":
-
-    vis_data(number=55)

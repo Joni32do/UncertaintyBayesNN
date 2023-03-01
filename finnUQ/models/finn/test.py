@@ -22,16 +22,6 @@ import pickle
 from utils.configuration import Configuration
 
 
-def plot_tensor(tensor):
-    fig, ax = plt.subplots(1,1)
-    h = ax.imshow(tensor.detach().numpy(), interpolation='nearest', 
-            extent=[0, 2,
-                    0, 55],
-            origin='upper', aspect='auto')
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes("right", size="5%", pad=0.05)
-    fig.colorbar(h, cax=cax)
-    plt.show()
 
 def run_testing(print_progress=False, visualize=False, model_number=None):
 
@@ -316,22 +306,37 @@ def run_testing(print_progress=False, visualize=False, model_number=None):
         with th.no_grad():
             u_hat = model(t=t, u=u)
         
+        
+
+
         if print_progress:
             print(f"Forward pass took: {time.time() - time_start} seconds.")
+
+
+        
         u_hat = u_hat.detach().cpu()
         u = u.detach().cpu()
         t = t.detach().cpu()
-        plot_tensor(u_hat[:,0])
-        plot_tensor(u[:,0])
+
+        # plot_tensor(u_hat[:,0,:])
+        # plot_tensor(u[:,0,:])
+
         # Compute error
-        mse = nn.MSELoss()(u_hat, u)
+        criterion = nn.MSELoss()
+        mse = criterion(u_hat, u)
+
+
         print(f"MSE: {mse}")
         with open(f"results/{config.model.number}/model.pkl", "wb") as outp:    
             pickle.dump(model, outp, pickle.HIGHEST_PROTOCOL)
         np.save(f"results/{config.model.number}/u_hat", u_hat)
         np.save(f"results/{config.model.number}/u", u)
+
         # params.save(f"results/{config.model.number}/", filename="params_NN.json")
         config.save(f"results/{config.model.number}/", filename="config_NN.json")
+    
+
+    #Fallunterscheidung ist unnötig    
     else:
         # Initialize the criterion (loss)
         criterion = nn.MSELoss()
@@ -636,6 +641,21 @@ def run_testing(print_progress=False, visualize=False, model_number=None):
     return model
 
 
+def eval_Bayes_net(net, x, n_runs, quantile = 0.05):
+    # Evaluate function using the Bayesian network   
+    y_preds = np.zeros((n_runs,x.size(dim=0)))
+    for i in range(n_runs):
+        y_preds[i] = net.forward(th.Tensor(x).unsqueeze(1)).detach().numpy().flatten()
+
+    # Calculate mean and quantiles
+    mean = np.mean(y_preds, axis=0)
+    median = np.median(y_preds, axis = 0)
+    std = np.std(y_preds, axis=0)
+    lower = np.quantile(y_preds, quantile, axis=0)
+    upper = np.quantile(y_preds, 1-quantile, axis=0)
+    return mean, median, std, lower, upper
+
+
 def animate_1d(t, axis1, axis2, field, field_hat):
     """
     Data animation function animating an image over time.
@@ -667,5 +687,6 @@ if __name__ == "__main__":
     th.set_num_threads(1)
     
     model = run_testing(print_progress=True, visualize=True)
-
+    for param in model.parameters():
+        print(param)
     print("Done.")

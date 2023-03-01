@@ -6,7 +6,7 @@
  "training": {
   "save_model": true,
   "continue_training": false,
-  "epochs": 5,
+  "epochs": 5000,
   "pretrain_epochs": 100,
   "learning_rate": 0.004
  },
@@ -17,7 +17,7 @@
  },
  "model": {
   "name": "diff-ad2ss",
-  "number": 52,
+  "number": 53,
   "bayes": false,
   "sort": false,
   "layer_sizes": [
@@ -33,19 +33,19 @@
   "sk_end": false,
   "synth": true,
   "learn_coeff": false,
-  "learn_f": true,
+  "learn_f": false,
   "learn_f_hyd": false,
   "learn_g_hyd": false,
-  "learn_r_hyd": false,
+  "learn_r_hyd": true,
   "learn_k_d": false,
   "learn_beta": false,
   "learn_alpha": false
  },
  "results": {
-  "current_epoch": 1,
-  "current_training_error": 5.402639594613026e-18,
-  "lowest_train_error": 5.402639594613026e-18,
-  "current_validation_error": 5.402639594613026e-18,
-  "lowest_validation_error": 5.402639594613026e-18
+  "current_epoch": 5000,
+  "current_training_error": 1.2826116346786876e-07,
+  "lowest_train_error": 1.2826116346786876e-07,
+  "current_validation_error": 1.2826116346786876e-07,
+  "lowest_validation_error": 1.2826116346786876e-07
  }
 }

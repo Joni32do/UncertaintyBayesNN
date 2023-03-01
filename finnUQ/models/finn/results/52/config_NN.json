@@ -40,12 +40,5 @@
   "learn_k_d": false,
   "learn_beta": false,
   "learn_alpha": false
- },
- "results": {
-  "current_epoch": 1,
-  "current_training_error": 5.402639594613026e-18,
-  "lowest_train_error": 5.402639594613026e-18,
-  "current_validation_error": 5.402639594613026e-18,
-  "lowest_validation_error": 5.402639594613026e-18
  }
 }

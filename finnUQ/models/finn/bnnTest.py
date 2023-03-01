@@ -91,9 +91,8 @@ def eval_Bayes_net(net, x, n_runs, quantile = 0.05):
     # Evaluate function using the Bayesian network   
     y_preds = np.zeros((n_runs,x.size(dim=0)))
     for i in range(n_runs):
-        y_pred = net.forward(torch.Tensor(x).unsqueeze(1)).detach().numpy().flatten()
-        y_preds[i] = y_pred
-
+        y_preds[i] = net.forward(torch.Tensor(x).unsqueeze(1)).detach().numpy().flatten()
+         
     # Calculate mean and quantiles
     mean = np.mean(y_preds, axis=0)
     lower = np.quantile(y_preds, quantile, axis=0)

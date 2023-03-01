@@ -154,7 +154,7 @@ def run_training(print_progress=True, model_number=None):
         # Initialize and set up the Two-Site sorption model
         # Dependeing on which parameter/functional relationship should be learned
         # corresponding boolean variables have to be changed
-        if config.model.bayes:
+        if config.bayes.is_bayes:
             model = FINN_DiffAD2ssBayes(
             u=u,
             D=np.array(params.alpha_l*params.v_e+params.D_e),
@@ -190,7 +190,9 @@ def run_training(print_progress=True, model_number=None):
             config=None,
             learn_stencil=False,
             bias=True,
-            sigmoid=True
+            sigmoid=True,
+            bayes_factor=config.bayes.bayes_factor,
+            bayes_arc=config.bayes.bayes_sizes
         ).to(device=device)
         else:
             model = FINN_DiffAD2ss(
@@ -372,8 +374,9 @@ def run_training(print_progress=True, model_number=None):
             mse = criterion(u_hat, u)
 
             #TODO: Add this directly to criterion and not in closure
+            #TODO: This is only for Finn where R is learned
             if config.model.bayes:
-                kl_divergence_loss = model.kl_loss(kl_weight)
+                kl_divergence_loss = model.func_r.kl_loss(kl_weight)
                 loss = mse + kl_divergence_loss
             else:
                 loss = mse
@@ -390,18 +393,19 @@ def run_training(print_progress=True, model_number=None):
     for epoch in range(config.training.epochs):
         epoch_start_time = time.time()
 
+        #Does one training step and appends it
+        mse = optimizer.step(closure)
+        mse_train.append(mse.item())
 
-        mse_train.append(optimizer.step(closure).item())
 
-
-        #Bayes
-        if config.model.bayes:
+        #Bayes #TODO:
+        if config.bayes.is_bayes:
             # Change from pretrain to train
-            if epoch == config.training.pretrain_epochs:
+            if epoch == config.bayes.pretrain_epochs:
                 model.set_pretrain(False)
 
             #Sort bias if enabled
-            if config.model.sort:
+            if config.bayes.sort:
                 model.sort_bias()
         
 
@@ -412,7 +416,7 @@ def run_training(print_progress=True, model_number=None):
         if mse_train[epoch] < best_train:
             train_sign = "(+)"
             best_train = mse_train[-1]
-            # Save the model to file (if desired)
+            # Save the model to file #TODO: A bit too often?
             if config.training.save_model:
                 # Start a separate thread to save the model
                 thread = Thread(target=helpers.save_model_to_file(model_src_path=os.path.abspath(""),config=config,epoch=epoch,
