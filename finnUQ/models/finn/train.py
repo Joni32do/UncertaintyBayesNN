@@ -138,7 +138,6 @@ def run_training(print_progress=True, model_number=None):
             # insert t=0
             exp_t = np.insert(exp_t, 0, 0)
 
-            ### Süß
             # average concentrations -> shift to middle value of times
             exp_mean_t = []
             for i in range(0,len(exp_t)):
@@ -205,7 +204,7 @@ def run_training(print_progress=True, model_number=None):
             u = th.stack((sample_c, sample_sk), dim=len(sample_c.shape))
             t = th.tensor(t, dtype=th.float).to(device=device)
             dx = params.X_LENGTH/(params.X_STEPS -1)
-        #Synthetic data
+        #Synthetic data (1/4)
         elif config.data.name == "data_train":
             u = np.load(f"results/{config.model.number}/u_FD.npy")
             t = np.load(f"results/{config.model.number}/t_series.npy")
@@ -217,6 +216,7 @@ def run_training(print_progress=True, model_number=None):
             # np to pytorch tensors
             u = th.tensor(u, dtype=th.float).to(device=device)
             t = th.tensor(t, dtype=th.float).to(device=device)
+        #Synthetic data
         elif config.data.name == "data_ext":
             # use whole synthetic data set for training
             u = th.tensor(np.load(f"results/{config.model.number}/u_FD.npy"),
@@ -470,6 +470,60 @@ def run_training(print_progress=True, model_number=None):
             
             #backward pass (calc gradients)
             loss.backward()
+            '''
+            
+            if config.data.type == "diffusion_ad2ss":
+                if config.data.name == "data_exp":
+                    
+
+                    # In order to prevent sk from being negative get all possibly
+                    # negative s_k from calculate solution
+                    # elem: fixed row (place), all columns (time)
+                    neg_u = nn.ReLU()(-u_hat)
+                    
+                    ref_u = th.zeros((neg_u.size(dim=0), neg_u.size(dim=1), neg_u.size(dim=2)), device=model.device, requires_grad=True)
+                    #print(f"sk: {neg_u[model.x_start:model.x_stop,:,1]}")
+                    #print(f"c: {neg_u[:,:,0]}")
+                    neg_u_loss = nn.MSELoss(reduction="mean")(ref_u, neg_u)
+                    #print(f"neg_loss: {neg_u_loss}")
+                    #pen_count = th.tensor(pen_count, dtype=th.float, device=model.device, requires_grad=True)
+                    #pen_count_goal = th.tensor(0, dtype=th.float, device=model.device)
+                    
+                    # calculate loss based on exp btc data
+                    mse_btc_points = 0
+                    if config.learn.c_out:
+                        # calculate loss for experimental btc points (MSE) 
+                        #plot_tensor(u[:,loss_indices[1]:,0])
+                        #mse_btc_points == nn.MSELoss(reduction="mean")(u_hat[-1,loss_indices[1]:,0], u[-1,loss_indices[1]:,0])
+                        #plot_tensor(u[...,0].detach().numpy())        
+                        #print(f"f: {model.__dict__['_parameters']['f'].item()}")
+                        #print(f"k_d: {model.__dict__['_parameters']['k_d'].item()}")
+                        #print(f"beta: {model.__dict__['_parameters']['beta'].item()}")
+                        #print(f"alpha: {model.__dict__['_parameters']['alpha_unc'].item()}")
+                        for eval_index in loss_indices:
+                            if config.learn.loss_calc_c_out == "NL1":
+                                if eval_index == 0:
+                                    pass
+                                else:
+                                    mse_btc_points += th.abs(u_hat[-1,eval_index,0]-u[-1,eval_index,0])/u[-1,eval_index,0]
+                            else:
+                                mse_btc_points += (u_hat[-1,eval_index,0] - u[-1,eval_index,0])**2
+
+                        mse_btc_points = mse_btc_points/(len(loss_indices)-1)
+                    # calculate loss base on exp sk data at end
+                    mse_sk_end = 0
+                    if config.learn.sk_end:
+                        mse_sk_end = nn.MSELoss(reduction="mean")(u_hat[model.x_start:model.x_stop,-1,1], u[model.x_start:model.x_stop,-1,1])
+                    print(f"sk_end_loss: {mse_sk_end}")
+                    model.neg_loss = neg_u_loss
+                    mse = mse_btc_points + mse_sk_end + 100000*neg_u_loss
+                    print(f"BTC: {mse_btc_points}")
+                    print(f"neg_loss: {neg_u_loss}")
+            
+            
+            
+            '''
+
 
             return mse
 

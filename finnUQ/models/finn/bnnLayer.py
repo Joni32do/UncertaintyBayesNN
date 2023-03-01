@@ -85,6 +85,7 @@ class LinearBayes(nn.Module):
         '''
         self.weights = self.mu_w  + (torch.log(1 + torch.exp(self.rho_w)) * self.noise_w.sample() 
                                      * self.is_bayes if stochastic else 0)
+        
         self.bias = self.mu_b + (torch.log( 1 + torch.exp(self.rho_b)) * self.noise_b.sample() 
                                  * self.is_bayes.squeeze() if stochastic else 0)
 

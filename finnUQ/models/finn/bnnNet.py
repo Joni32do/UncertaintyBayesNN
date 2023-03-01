@@ -6,7 +6,7 @@ from bnnLayer import LinearBayes
 
 
 class BayesianNet(nn.Module):
-    def __init__(self, arc=[1,10,1], bayes_factor = 0, bayes_arc = None, rho = -4):
+    def __init__(self, arc=[1,10,1], bayes_arc = [1], rho = -4):
         super(BayesianNet, self).__init__()
         '''
         Generates a fully Bayesian network  
@@ -15,14 +15,17 @@ class BayesianNet(nn.Module):
             - architecture: _arc_
         
         Optional arguments:
-            - bayes_factor: Can be used to adjust how much percent of each layer is bayesian
+                        
+            - bayes_arc: Bayes architecture 
+                    o  single value -> bayes_factor for all layers
+
+                    o  shape -> speciefied bayes_factor for each layer 
+
+                    - bayes_factor: Can be used to adjust how much percent of each layer is bayesian
                     o   Either takes value between 0 < bayes_factor < 1
                     o   Or integer numbers from 0 to n_out which indicate how many neurons have zero_variance
                     o   If it has value -1 nn.Linear is used
                     Admittingly a bit overused
-            
-            - bayes_arc: Bayes architecture 
-                    o   Directly invoke zero_variance each layer 
 
             - rho: Initial variation of params
                     o TODO: rho_w \neq rho_b
@@ -30,16 +33,14 @@ class BayesianNet(nn.Module):
         
         '''
         self.arc=arc
-        self.layers_num = len(arc)
+        self.layers_n = len(arc)
+        self.activation_fn = torch.tanh
         
-        if bayes_arc is None:
-            bayes_arc = np.ones(len(arc)) * bayes_factor 
-            print(bayes_arc)
-
-
+        if len(bayes_arc) == 1:
+            bayes_arc = np.ones(len(arc)) * bayes_arc[0]
 
         layers = []
-        for i in range(self.layers_num-1):
+        for i in range(self.layers_n-1):
             layers.append(LinearBayes(arc[i],arc[i+1],
                             rho_w_prior = rho, rho_b_prior = rho, 
                             bayes_factor = bayes_arc[i+1], pretrain=True))
@@ -65,8 +66,8 @@ class BayesianNet(nn.Module):
     def forward(self, x):
         
         for idx, layer in enumerate(self.layers):
-            if idx < self.layers_num - 2: 
-                x = torch.tanh(layer(x))
+            if idx < self.layers_n - 2: 
+                x = self.activation_fn(layer(x))
             else: #last layer
                 x = layer(x)
 

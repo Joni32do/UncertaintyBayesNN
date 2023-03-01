@@ -42,9 +42,9 @@ def __add_fig(fig, ax, row:float, column:float, title:str, value:np.ndarray,
     """
     font_size = 12
     if is_c:
-        cmap = 'RdPu'
+        cmap = 'coolwarm'
     else:
-        cmap = 'GnBu'
+        cmap = 'Greens'
     h = ax[row, column].imshow(value, cmap = cmap, interpolation='nearest', 
                     extent=[t.min(), t.max(),
                             x.min(), x.max()],
@@ -152,9 +152,9 @@ def vis_diff(u_FD:np.ndarray, u_NN:np.ndarray, t:np.ndarray,
            
 
     __add_fig(fig=fig, ax=ax, row=0, column=0, title= title_c,
-        value=diff_c, x=x, t=t)
+        value=diff_c, x=x, t=t, is_c = True)
     __add_fig(fig=fig, ax=ax, row=0, column=1, title= title_s,
-        value=diff_sk, x=x, t=t)
+        value=diff_sk, x=x, t=t, is_c = False)
     
     if save_path is not None:
         name = "Diff"
