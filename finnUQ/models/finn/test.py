@@ -335,11 +335,12 @@ def run_testing(print_progress=False, visualize=False, model_number=None):
         np.save(f"results/{config.model.number}/u", u)
 
         if config.bayes.is_bayes:
-            np.save(np.save(os.path.join(path, "mean")), mean)
-            np.save(np.save(os.path.join(path, "median")), median)
-            np.save(np.save(os.path.join(path, "std")), std)
-            np.save(np.save(os.path.join(path, "lower")), lower)
-            np.save(np.save(os.path.join(path, "upper")), upper)
+            np.save(os.path.join(path, "mean"), mean)
+            np.save(os.path.join(path, "mean"), mean)
+            np.save(os.path.join(path, "median"), median)
+            np.save(os.path.join(path, "std"), std)
+            np.save(os.path.join(path, "lower"), lower)
+            np.save(os.path.join(path, "upper"), upper)
 
         #TODO: Improve on this fuckery
         # params.save(f"results/{config.model.number}/", filename="params_NN.json")

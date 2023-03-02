@@ -21,18 +21,17 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import xlsxwriter
 
+#Import from upper directory
+sys.path.append("..")
+sys.path.append("..")
 
-
+#Parameter json
+import json
 
 
 
 '''
 Testframework
-
-Doesn't really mind to much about Exception handeling and other because it 
-anyways is only a product of time
-
-WELL, how the Turn tables
 
 
 x_train[::samples] reverses np.repeat
@@ -57,18 +56,23 @@ def generate_data(bars, samples, noise = 0.001, x_min = 0.001 , x_max = 1):
     noise = torch.randn((bars,samples)) * x * noise
     
     #Automatch to shape (n,samples)
+    
+    #Calculate 1/R with 
     k_d = 1.5
     beta = 0.7
     rho = 1.58
     n_e = 0.4
     f = 0.3
 
-    factor = rho/n_e * f * k_d * beta #
-    #Null ausschließen
-    y = 1 +factor * x**(beta-1) + noise
+    a = (1-n_e)/n_e * rho * f * k_d * beta
+    y = torch.zeros((bars,1))
+    y[x!=0] = 1/(1 + a * x[x!=0]**(beta-1))
+    y = y + noise
     y = torch.reshape(y,(n,1))
     x = x.repeat_interleave(samples,0)
-    return x,y
+
+
+    return x,y  
 
 
 def train_net(net, epochs, x_train, y_train, pretrain_epochs = 0, sort = False, logging = True):
@@ -162,7 +166,7 @@ def create_fig(x_train, y_train,std_train, mean ,lower, upper, path = None):
     '''
     Plots results
     '''
-    x_test, y_true = generate_data(bars=200,samples = 1,noise = 0, x_min = 0.1, x_max = 1)
+    x_test, y_true = generate_data(bars=200,samples = 1,noise = 0, x_min = 0, x_max = 1)
     samples = int(len(x_train)/len(mean))
     
     fig = plt.figure(figsize=(8,5))
@@ -180,58 +184,72 @@ def create_fig(x_train, y_train,std_train, mean ,lower, upper, path = None):
     plt.close()
 
 
-def experiment(epochs, pretrain_epochs, arc, bayes_arc, prior_rho,
-               t, samples, x_train, y_train, noise, path):
-    
+def experiment(dict, arc, bayes_arc, t,  path):
+    ##From dictionary
+    #Parameters training
+    training = dict["training"]
+
+    epochs = training["epochs"]
+    pretrain_epochs = training["pretrain_epochs"]
+    rho = training["prior_rho"]
+    sort = training["sort"]
+
+    #Parameter data
+    data = dict["data"]
+
+    bars = data["n_bars"]
+    samples = data["n_samples"]
+    noise = data["noise"]
+    x_min = data["x_min"]
+    x_max = data["x_max"]
+    #####
+
+
+
     #Location and name of file
-    
-    pathFigure = os.path.join(path, str(t))
-    
+    path_figure = os.path.join(path, str(t))
+       
+    #Data (cheap - takes 0.0001s)
+    x_train,y_train = generate_data(bars, samples ,noise, x_min, x_max)
+
     #Network    
-    net = BayesianNet(arc, bayes_arc,rho = prior_rho)
+    net = BayesianNet(arc, bayes_arc, rho)
             
 
     #Training
     mse = train_net(net,epochs, x_train, y_train, pretrain_epochs, sort)
+    #TODO:
+    #Sample with 
     
+
     #Evaluation
     y_preds,mean,lower,upper = eval_Bayes_net(net,x_train[::samples],samples)
     water = calc_water(y_train, y_preds, samples)
 
     #Plotting
-    create_fig(x_train, y_train, noise, mean, lower, upper, pathFigure)
+    create_fig(x_train, y_train, noise, mean, lower, upper, path_figure)
 
     return mse , water
 
 
 
 if __name__ == '__main__':
-    
-    ### Parameters
-    #Dataset
-    bars = 15
-    # Samples from Function and BNN
-    samples = 100
-    noise = 0.1 #Is increasing with distance from origin see data
-    
+    root = os.path.join(os.path.realpath(__file__), "..", "meta_analysis")
+    print("This is the root ", root)
 
-    #Training
-    epochs = 2000
+    #Load parameters from json
+    with open(os.path.join(root,"meta.json"), 'r') as param:
+        meta = json.load(param)
     
-    #Extras
-    pretrain_epochs = 1000
-    prior_rho = 0.01
-    sort = True
-
-
-
-
-    #Data
-    x_train,y_train = generate_data(bars, samples ,noise, x_min = 0.1, x_max = 1)
-    
-    
+    print(meta["training"]["sort"])
     #File managment
-    description = "Bar_" + str(bars) + "Std_" + str(noise) +  "E_" + str(epochs) + "P_" + str(pretrain_epochs) + "Rho_", str(prior_rho), "Sort" if sort else ""
+    description = "Bar_" + str(meta["data"]["n_bars"]) + \
+                  "S_" + str(meta["data"]["n_samples"]) + \
+                  "Std_" + str(meta["data"]["noise"])+ \
+                  "E_" + str(meta["training"]["epochs"]) + \
+                  "P_" + str(meta["training"]["pretrain_epochs"]) + \
+                  "Rho_" + str(meta["training"]["prior_rho"]) + \
+                  "Sort" if meta["training"]["sort"] else ""
     '''
     Other influences:
         - Training
@@ -244,17 +262,13 @@ if __name__ == '__main__':
 
     '''   
     #
-    main_path = os.path.join(sys.argv[0], "..", "meta_analysis", description) #If empty plots functions
+    main_path = os.path.join(root, description) #If empty plots functions
     Path(main_path).mkdir(parents=True, exist_ok=True)
 
     ###Meta Analysis
 
     #Architectures
-    architectures =  [[1, 32, 1], #96
-                      [1, 8, 8, 1], #97
-                      [1, 4, 9, 4, 1], #97
-                      [1, 8, 4, 8, 1]] #98
-    
+    architectures =  meta["build"]["architectures"]
     #Bayes Architectur
     '''
     This is the main investigation of my bachelor thesis:
@@ -294,16 +308,15 @@ if __name__ == '__main__':
     	
     
     '''
-    bayes_arcs = [[0.25],[0.5],[0.75],[1]]
-    all_combinations_possible = True
-
- 
+    bayes_arcs = meta["build"]["bayes_arcs"]
+    #Combis
+    all_combis = meta["build"]["all_combinations_possible"]
     #Multiple trainings with same params
-    tries = 7
+    tries = meta["build"]["tries"]
     
 
     ###### Experiment
-    if all_combinations_possible:
+    if all_combis:
 
         ### Meassurements
         n_cases = len(architectures) * len(bayes_arcs) * tries
@@ -326,8 +339,8 @@ if __name__ == '__main__':
             for j,bayes_arc in enumerate(bayes_arcs):
                 print("Training architecture: ", arc, " with stochasticity ", bayes_arc, " model", (i*len(architectures)+j+1),"/",len(architectures)*len(bayes_arcs))
 
-                #Folder
-                path = os.path.join(main_path,"A_" + str(arc) + "B_" + str(bayes_arc))
+                #Directories
+                path = os.path.join(main_path,"A_" + str(arc), "B_" + str(bayes_arc))
                 Path(path).mkdir(parents=True, exist_ok=True)
 
 
@@ -336,8 +349,7 @@ if __name__ == '__main__':
                     print("\t Try: ", t+1, "/", tries)
                     start = time.time()
 
-                    m, w  = experiment(epochs, pretrain_epochs, arc, bayes_arc, prior_rho 
-                                    t, samples, x_train, y_train, noise, path)
+                    m, w  = experiment(meta, arc, bayes_arc, t, path)
                     
                     mse[i,j,t] = m
                     wasserstein[i,j,t] = w
@@ -378,10 +390,18 @@ if __name__ == '__main__':
     
     idx = np.unravel_index(np.argmin(np.mean(wasserstein, axis=2)), wasserstein.shape) 
     print("The best average model is: \n \t Architecture: ",architectures[idx[0]],"\n \t Bayes Archi:", bayes_arcs[idx[1]])
-    print(np.around(mse, 4))
+
     print(np.median(mse,axis = 2))
 
+
+    #Save numpy ndarrays
+    np.save(os.path.join(main_path, "mse"), mse)
+    np.save(os.path.join(main_path, "wasserstein"), wasserstein)
     
+    # Saving the parameters from the meta.json file
+    with open(os.path.join(main_path, "meta_params.json"), "w") as fp:
+        json.dump(meta, fp)
+
     # Creating Excel Writer Object from Pandas  
     str_arcs = [str(i) for i in architectures]
     str_bayes_arcs = [str(i) for i in bayes_arcs]
