@@ -112,7 +112,7 @@ def generate_data(dic):
     return dic  
 
 
-def train_net(net, x_train, y_train, epochs, pretrain_epochs = 0, sort = False, logging = False):
+def train_net(net, x_train, y_train, epochs, pretrain_epochs = 0, sort = False, logging = True):
     '''
     Trains a Bayesian network (def line 16)
         - lr = 0.001
@@ -466,7 +466,7 @@ if __name__ == '__main__':
     print(description,"\n")
 
     total_time = np.sum(training_time)
-    print(f"Total time: {total_time} \n")
+    print(f"Total time: {np.around(total_time,0)} seconds -> {np.around(total_time/3600,1)} hours \n")
 
     idx = np.unravel_index(np.argmin(wasserstein), wasserstein.shape)    
     print("The best model is: \n \t Architecture: ",architectures[idx[0]],"\n \t Bayes Archi:", bayes_arcs[idx[1]], "\n at try", idx[2])

@@ -796,7 +796,7 @@ class FINN_DiffAD2ssBayes(FINN):
                  n_e_sand:Optional[np.ndarray]=None, x_start_soil:Optional[int]=None, 
                  x_stop_soil:Optional[int]=None, alpha_l_sand:Optional[np.ndarray]=None,
                  v_e_sand:Optional[np.ndarray]=None, mode="train", config=None, learn_coeff=True, learn_stencil=False, 
-                 bias=True, sigmoid=True, bayes_factor = 0, bayes_arc=None):
+                 bias=True, sigmoid=True, bayes_arc=[0.5], state_dict_r = None):
         """Constructor of FINN_AD2ss class
 
         Args:
@@ -845,8 +845,7 @@ class FINN_DiffAD2ssBayes(FINN):
 
 
         #BNN specific
-        self.bayes_factor = bayes_factor
-        self.bayes_arc = bayes_arc
+        self.bayes_arc =bayes_arc
 
         # potentially learnable parameters
         if not learn_f:
@@ -884,6 +883,8 @@ class FINN_DiffAD2ssBayes(FINN):
 
         if learn_r_hyd:
             self.func_r = self.function_learner().to(device=self.device)
+            if state_dict_r is not None:
+                self.func_r.load_state_dict(state_dict_r)
             self.ret_fac = nn.Parameter(th.tensor([1], dtype=th.double))
 
         if learn_g_hyd:
@@ -925,7 +926,7 @@ class FINN_DiffAD2ssBayes(FINN):
         This function constructs a feedforward NN required for calculation
         of constitutive function (or flux multiplier) as a function of u.
         """
-        return BayesianNet(self.layer_sizes,self.bayes_factor, self.bayes_arc)
+        return BayesianNet(self.layer_sizes, self.bayes_arc)
         
         '''
         
@@ -1023,7 +1024,7 @@ class FINN_DiffAD2ssBayes(FINN):
             vx = v_soil_plus/self.dx
 
             top_bound_flux = (Dsxx*(self.stencil[0]*c[0] + self.stencil[1]*self.BC[0]) - \
-                             vsx *(-self.stencil[0]*c[0] - self.stencil[1]*self.BC[0])).unsqueeze(0)
+                             vsx *(-self.stencil[0]*c[0] - self.stencil[1]*self.BC[0])).unsqueeze(0).float()
             
             top_flux_sand_top = Dsxx*(self.stencil[0]*c[1:self.x_start] + self.stencil[1]*c[:self.x_start-1]) - \
                                 vsx*(-self.stencil[0]*c[1:self.x_start] - self.stencil[1]*c[:self.x_start-1])
@@ -1033,7 +1034,7 @@ class FINN_DiffAD2ssBayes(FINN):
             
             top_flux_sand_bot = Dsxx * (self.stencil[0]*c[self.x_stop:]+self.stencil[1]*c[self.x_stop-1:-1]) - \
                                 vsx * (-self.stencil[0]*c[self.x_stop:]-self.stencil[1]*c[self.x_stop-1:-1])
-            
+
             # # Better readability
             # top_bound_flux = (Dsxx*(self.BC[0] -c[0]) + 
             #                  vsx *(self.BC[0] - c[0] )).unsqueeze(0)
@@ -1064,6 +1065,11 @@ class FINN_DiffAD2ssBayes(FINN):
             ########################################################
             # USELESS ONLY FOR NICE SCHEME IS ALL ZERO
             # bot boundary fluxes
+
+            vsx = v_sand_min/self.dx
+            vx = v_soil_min/self.dx
+
+
             bot_flux_sand_top = Dsxx *(self.stencil[0]*c[:self.x_start]+self.stencil[1]*c[1:self.x_start+1]) - \
                                 vsx * (self.stencil[0]*c[:self.x_start]+self.stencil[1]*c[1:self.x_start+1])
             
@@ -1076,6 +1082,7 @@ class FINN_DiffAD2ssBayes(FINN):
             bot_bound_flux = th.tensor(0).unsqueeze(0)
 
             bot_flux = th.cat((bot_flux_sand_top, bot_flux_soil, bot_flux_sand_bot, bot_bound_flux))
+  
             ########################################################
 
 
@@ -1108,15 +1115,11 @@ class FINN_DiffAD2ssBayes(FINN):
                 #TODO: Hier habe ich noch was hinzu geschrieben - die verschiedene Sand betrachtung hat gefehlt und ich habe
                 #reduziere auf Zeitabhängiges Verhalten
                 #Retardation is also useless
-                ret = th.ones(self.Nx)
-                print(cw_soil[:,None].size())
-                time_vec = th.ones([self.Nx])*t
-                t_c = th.stack((c, time_vec), dim=1)
-                t_c.unsqueeze(-1)
-                print(t_c)
-                print(t_c.size())
-                print(t_c[:,0].size())
-                ret[self.x_start:self.x_stop] = 1+self.func_r(cw_soil[:,None])*(10**self.ret_fac)
+                ret = th.ones(self.Nx,1)
+                # cw_soil = cw_soil.float()
+                # print(cw_soil.dtype)
+                # ret[self.x_start:self.x_stop] = 1+self.func_r(cw_soil[:,None])*(10**self.ret_fac)
+                ret[self.x_start:self.x_stop] = self.func_r(cw_soil[:,None])
                 ret = ret.squeeze(-1)
             
             # PHYSICAL INFORMATION:
@@ -1132,13 +1135,15 @@ class FINN_DiffAD2ssBayes(FINN):
                 g_hyd[self.x_start:self.x_stop] = (self.func_g(t_sk.float())*th.abs(self.g_fac))[:,0]
 
             # Integrate the fluxes at all boundaries of control volumes i
-            flux_c = (top_flux + bot_flux+f_hyd*c+g_hyd)/ret
+            flux_c = ret*(top_flux + bot_flux+f_hyd*c+g_hyd)
 
             # Calculate sk flux using F, G, and R
             flux_sk=th.zeros(self.Nx)
             flux_sk[self.x_start:self.x_stop] = -f_hyd[self.x_start:self.x_stop]*(self.n_e/self.rho_s)*cw_soil-g_hyd[self.x_start:self.x_stop]*(self.n_e/self.rho_s) 
             flux_sk[self.x_start:self.x_stop] = -(self.n_e/self.rho_s)*(f_hyd[self.x_start:self.x_stop]*cw_soil + g_hyd[self.x_start:self.x_stop])
             flux = th.stack((flux_c, flux_sk), dim=len(c.size()))
+            
+            
             return flux
 
         else:

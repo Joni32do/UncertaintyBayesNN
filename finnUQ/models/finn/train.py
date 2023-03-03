@@ -278,8 +278,7 @@ def run_training(print_progress=True, model_number=None):
             learn_stencil=False,
             bias=True,
             sigmoid=True,
-            bayes_factor=config.bayes.bayes_factor,
-            bayes_arc=config.bayes.bayes_sizes
+            bayes_arc=config.bayes.bayes_arc
         ).to(device=device)
         else:
             model = FINN_DiffAD2ss(
@@ -462,7 +461,7 @@ def run_training(print_progress=True, model_number=None):
 
             #TODO: Add this directly to criterion and not in closure
             #TODO: This is only for Finn where R is learned
-            if config.model.bayes:
+            if config.bayes.is_bayes:
                 kl_divergence_loss = model.func_r.kl_loss(kl_weight)
                 loss = mse + kl_divergence_loss
             else:
@@ -540,14 +539,16 @@ def run_training(print_progress=True, model_number=None):
 
 
         #Bayes #TODO:
+        #UGLY: Should do something like get iterable of bnn 
+        #                                       -> loop: set_pretrain(False)
         if config.bayes.is_bayes:
             # Change from pretrain to train
             if epoch == config.bayes.pretrain_epochs:
-                model.set_pretrain(False)
+                model.func_r.set_pretrain(False)
 
             #Sort bias if enabled
             if config.bayes.sort:
-                model.sort_bias()
+                model.func_r.sort_bias()
         
 
         
@@ -560,12 +561,13 @@ def run_training(print_progress=True, model_number=None):
             # Save the model to file #TODO: A bit too often?
             if config.training.save_model:
                 # Start a separate thread to save the model
-                thread = Thread(target=helpers.save_model_to_file(model_src_path=os.path.abspath(""),config=config,epoch=epoch,
-                    epoch_errors_train=mse_train,epoch_errors_valid=mse_train,net=model))
+                thread = Thread(target=helpers.save_model_to_file(model_src_path=os.path.abspath(""),
+                                                                  config=config,
+                                                                  epoch=epoch,
+                                                                  epoch_errors_train=mse_train,
+                                                                  epoch_errors_valid=mse_train,
+                                                                  net=model))
                 thread.start()
-        
-        
-
 
         # Print progress to the console
         if print_progress:

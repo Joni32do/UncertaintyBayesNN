@@ -6,8 +6,7 @@
  "training": {
   "save_model": true,
   "continue_training": false,
-  "epochs": 1500,
-  "pretrain_epochs": 1000,
+  "epochs": 100,
   "learning_rate": 0.004
  },
  "data": {
@@ -18,21 +17,24 @@
  "model": {
   "name": "diff-ad2ss",
   "number": 81,
-  "sort": false,
   "layer_sizes": [
-   2,
+   1,
    8,
    8,
    1
-  ],
-  "bayes": true,
-  "bayes_factor": 0,
-  "bayes_sizes": [
+  ]
+ },
+ "bayes": {
+  "is_bayes": true,
+  "pretrain_epochs": 50,
+  "sort": false,
+  "bayes_arc": [
    0,
    0,
    4,
    1
-  ]
+  ],
+  "runs": 20
  },
  "learn": {
   "c_out": false,

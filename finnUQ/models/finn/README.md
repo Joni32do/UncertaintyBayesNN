@@ -25,3 +25,10 @@
 80: Pre1000
 81: Pre1000Epoch1000 
 #Warum sagt es, es wären 637 Parameter zum trainieren - warum ist es jetzt wieder nan?
+
+
+
+        "architectures":[[1, 333, 1],
+                        [1, 98, 98, 1],
+                        [1, 49, 98, 49, 1],
+                        [1, 98, 49, 98, 1]],

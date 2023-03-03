@@ -114,7 +114,7 @@ def vis_FD_NN(u_FD:np.ndarray, u_NN:np.ndarray,
         value=u_NN[...,1], x=x, t=t)
     
     if save_path is not None:
-        plt.savefig(os.path.join(save_path,"FD_NN.pdf"))
+        plt.savefig(save_path)
     else:
         plt.show()
 
@@ -157,12 +157,8 @@ def vis_diff(u_FD:np.ndarray, u_NN:np.ndarray, t:np.ndarray,
         value=diff_sk, x=x, t=t, is_c = False)
     
     if save_path is not None:
-        name = "Diff"
-        if squared:
-            name += "Sq"
-            if log_value:
-                name += "Log"
-        plt.savefig(os.path.join(save_path,name + ".pdf"))
+        
+        plt.savefig(save_path)
     else:
         plt.show()
 
@@ -271,8 +267,8 @@ if __name__ == "__main__":
     
     # load bayes data
     if config.bayes.is_bayes:
-        # mean, median, std, lower, upper = load_bayes(number)
-        pass
+        mean, median, std, lower, upper = load_bayes(number)
+        
 
     
     #Save or print (if path is None)
@@ -280,15 +276,23 @@ if __name__ == "__main__":
     os.makedirs(save_path, exist_ok=True)
 
     # visualize
+    print(model)
     print(model.__dict__)
-    vis_FD_NN(u, u_NN, t, x, save_path)
-    vis_diff(u, u_NN, t, x, save_path = save_path)
-    vis_diff(u, u_NN, t, x, squared = True, save_path = save_path)
-    vis_diff(u, u_NN, t, x, squared = True, 
-             log_value=True, save_path = save_path)
+    vis_FD_NN(u, u_NN, t, x, os.path.join(save_path,"FD_NN.pdf"))
+    vis_diff(u, u_NN, t, x, save_path = os.path.join(save_path,"Diff.pdf"))
+    vis_diff(u, u_NN, t, x, squared = True, save_path = os.path.join(save_path,"DiffSq.pdf"))
+
+    # vis_diff(u, u_NN, t, x, squared = True, 
+    #          log_value=True, save_path = os.path.join(save_path,"DiffLog.pdf"))
     vis_btc( u, u_NN, t, x, save_path = save_path)
 
-    
+    if config.bayes.is_bayes:
+        
+        vis_diff(u, mean, t, x, squared = True, save_path = os.path.join(save_path,"Bayes_MeanDiffSq.pdf"))
+        # vis_diff(u, median, t, x, squared = True, save_path = os.path.join(save_path,"Bayes_Diff.pdf"))
+        vis_diff(u, lower, t, x, squared = True, save_path = os.path.join(save_path,"Bayes_LowerDiffSq.pdf"))
+        vis_diff(u, upper, t, x, squared = True, save_path = os.path.join(save_path,"Bayes_UpperDiffSq.pdf"))
+        vis_FD_NN(u, lower - upper, t, x, save_path = os.path.join(save_path,"Bayes_DifferenceLowerUpper.pdf"))
     
 
 

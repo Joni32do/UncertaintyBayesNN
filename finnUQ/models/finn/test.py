@@ -131,7 +131,8 @@ def run_testing(print_progress=False, visualize=False, model_number=None):
             config=None,
             learn_stencil=False,
             bias=True,
-            sigmoid=True
+            sigmoid=True,
+            bayes_arc = config.bayes.bayes_arc
         ).to(device=device)
         else:
             model = FINN_DiffAD2ss(
@@ -323,7 +324,10 @@ def run_testing(print_progress=False, visualize=False, model_number=None):
 
         if config.bayes.is_bayes:
             mean, median, std, lower, upper = eval_Bayes_finn(model, t, u, config.bayes.runs)
-            mse_bayes = criterion(mean, u)
+            print(mean)
+            print(mean.shape)
+            print(u.size())
+            mse_bayes = criterion(th.tensor(mean), u)
             print(f"MSE_Mean:{mse_bayes}")
         
 
@@ -659,11 +663,14 @@ def run_testing(print_progress=False, visualize=False, model_number=None):
 
 
 def eval_Bayes_finn(net, t, u, n_runs, quantile = 0.05):
-    # Evaluate function using the Bayesian network   
-    y_preds = np.zeros((n_runs,u.size(dim=0)))
-    for i in range(n_runs):
-        y_preds[i] = net.forward(t, u).detach().numpy().flatten()
+    # Evaluate function using the Bayesian network
+    y_preds = th.zeros((n_runs,u.size()[0],u.size()[1],u.size()[2]))
+    with th.no_grad():
+        for i in range(n_runs):
+            y_preds[i] = net(t, u).detach()
+            print(f"\r Run {i}/{n_runs}")
 
+    y_preds = y_preds.numpy()
     # Calculate mean and quantiles
     mean = np.mean(y_preds, axis=0)
     median = np.median(y_preds, axis = 0)
