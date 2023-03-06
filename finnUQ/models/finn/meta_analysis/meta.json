@@ -23,8 +23,8 @@
         }
     },
     "training":{
-        "rho":0.0001,
-        "epochs":5000,
+        "rho":0.000000001,
+        "epochs":4900,
         "pretrain_epochs":4900,
         "learning_rate":0.001,
         "sort":true,
@@ -32,9 +32,12 @@
     },
     "build":{
         "n_params":100,
-        "architectures":[[1, 8, 8, 1],
-                         [1, 32, 1]],
-        "bayes_arcs":   [[1]],
+        "architectures":[[1, 32, 1],
+                         [1, 8, 8, 1],
+                         [1, 4, 9, 4, 1],
+                         [1, 8, 4, 8, 1]
+                         ],
+        "bayes_arcs":[[0]],
         "all_combinations_possible":true,
         "tries": 3
     }

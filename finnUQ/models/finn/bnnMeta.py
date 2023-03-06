@@ -592,8 +592,6 @@ if __name__ == '__main__':
         for i, b_arc in enumerate(bayes_arcs):
             str_arcs[i] = str_arcs[i] + str(b_arc)
 
-    print(str_arcs)
-    print(str_bayes_arcs)
 
     m_df = pd.DataFrame(np.median(mse,axis=-1),        index = str_arcs, columns= str_bayes_arcs)
     w_df = pd.DataFrame(np.median(wasserstein,axis=-1),index = str_arcs, columns= str_bayes_arcs)
