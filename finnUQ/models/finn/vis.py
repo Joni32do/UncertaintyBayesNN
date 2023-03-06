@@ -40,7 +40,7 @@ def __add_fig(fig, ax, row:float, column:float, title:str, value:np.ndarray,
         x (np.ndarray): _description_
         t (np.ndarray): _description_
     """
-    font_size = 12
+    font_size = FONT_SIZE
     if is_c:
         cmap = 'coolwarm'
     else:
@@ -157,7 +157,6 @@ def vis_diff(u_FD:np.ndarray, u_NN:np.ndarray, t:np.ndarray,
         value=diff_sk, x=x, t=t, is_c = False)
     
     if save_path is not None:
-        
         plt.savefig(save_path)
     else:
         plt.show()
@@ -183,8 +182,8 @@ def generate_plot_title(squared, log_value):
     title_s += r"\left[\frac{\mu g}{g}\right]$"
     return title_c,title_s
 
-def vis_btc(u, u_hat, t, x, save_path = None):
-    font_size = 12
+def vis_btc(u, u_hat, t, lower = None, upper = None, save_path = None):
+    font_size =  FONT_SIZE
     fig, ax = plt.subplots(1,1)
 
     # plot BTC
@@ -193,7 +192,13 @@ def vis_btc(u, u_hat, t, x, save_path = None):
     ax.set_title("Conc. of PFOS at outflow", fontsize=font_size)
     
     ax.plot(t, u[-1,:,0], color="b", label="FD")
-    ax.plot(t, u_hat[-1,:,0], color="y", label="FINN")
+    ax.plot(t, u_hat[-1,:,0], color="g", label="FINN")
+
+    if upper is not None and lower is not None:
+        print(lower[-1,:,0])
+        print(upper[-1,:,0])
+        
+        ax.fill_between(t, lower[-1,:,0], upper[-1,:,0], label='BNN margin')
 
     ax.legend(fontsize=font_size)
     plt.locator_params(axis="x", nbins=6)
@@ -207,7 +212,7 @@ def vis_btc(u, u_hat, t, x, save_path = None):
         plt.show()
 
 def vis_sk_end(u, u_hat, t, x, config_NN, save_path = None):
-    font_size = 12
+    font_size = FONT_SIZE
     fig, ax = plt.subplots(1,1)
 
     # plot sk end
@@ -251,7 +256,7 @@ def vis_sorption_isotherms(model, u, u_hat, t, x, config_NN:Configuration):
     plt.show()
 
 
-
+FONT_SIZE = 12
 
 if __name__ == "__main__":
     config = Configuration("config.json")
@@ -272,12 +277,13 @@ if __name__ == "__main__":
 
     
     #Save or print (if path is None)
-    save_path = f"./visualize/{number}"
+    save_path = os.path.join(os.path.dirname(__file__), "visualize", str(number))
     os.makedirs(save_path, exist_ok=True)
 
     # visualize
-    print(model)
-    print(model.__dict__)
+
+    #print model
+    # print(model.__dict__)
     vis_FD_NN(u, u_NN, t, x, os.path.join(save_path,"FD_NN.pdf"))
     vis_diff(u, u_NN, t, x, save_path = os.path.join(save_path,"Diff.pdf"))
     vis_diff(u, u_NN, t, x, squared = True, save_path = os.path.join(save_path,"DiffSq.pdf"))
@@ -287,13 +293,17 @@ if __name__ == "__main__":
     vis_btc( u, u_NN, t, x, save_path = save_path)
 
     if config.bayes.is_bayes:
-        
-        vis_diff(u, mean, t, x, squared = True, save_path = os.path.join(save_path,"Bayes_MeanDiffSq.pdf"))
-        # vis_diff(u, median, t, x, squared = True, save_path = os.path.join(save_path,"Bayes_Diff.pdf"))
-        vis_diff(u, lower, t, x, squared = True, save_path = os.path.join(save_path,"Bayes_LowerDiffSq.pdf"))
-        vis_diff(u, upper, t, x, squared = True, save_path = os.path.join(save_path,"Bayes_UpperDiffSq.pdf"))
-        vis_FD_NN(u, lower - upper, t, x, save_path = os.path.join(save_path,"Bayes_DifferenceLowerUpper.pdf"))
-    
+        if save_path is not None:
+            bnn_path = os.path.join(save_path, "bayes")
+        else:
+            bnn_path = None
+        os.makedirs(bnn_path, exist_ok=True)
+        vis_diff(u, mean, t, x, squared = True, save_path= os.path.join(bnn_path,"Bayes_MeanDiffSq.pdf"))
+        # vis_diff(u, median, t, x, squared = True, save_path = os.path.join(bnn_path,"Bayes_Diff.pdf"))
+        vis_diff(u, lower, t, x, squared = True, save_path = os.path.join(bnn_path,"Bayes_LowerDiffSq.pdf"))
+        vis_diff(u, upper, t, x, squared = True, save_path = os.path.join(bnn_path,"Bayes_UpperDiffSq.pdf"))
+        vis_FD_NN(u, lower - upper, t, x, save_path = os.path.join(bnn_path,"Bayes_DifferenceLowerUpper.pdf"))
+        vis_btc(u,mean,t,lower,upper,bnn_path)
 
 
 

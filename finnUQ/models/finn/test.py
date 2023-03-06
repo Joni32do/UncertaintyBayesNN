@@ -34,6 +34,8 @@ def run_testing(print_progress=False, visualize=False, model_number=None):
     root_path = os.path.abspath("../../data")
     data_path = os.path.join(root_path, config.data.type, config.data.name)
     
+    model_nn_path = os.path.abspath("state_dict_retardation/model.pth")
+
     # Print some information to console
     print("Model name:", config.model.name)
 
@@ -96,7 +98,7 @@ def run_testing(print_progress=False, visualize=False, model_number=None):
             
         # Initialize and set up the model
         if config.bayes.is_bayes:
-            model_path = config.bayes.model_loc
+            
 
             model = FINN_DiffAD2ssBayes(
             u=u,
@@ -135,7 +137,7 @@ def run_testing(print_progress=False, visualize=False, model_number=None):
             bias=True,
             sigmoid=True,
             bayes_arc = config.bayes.bayes_arc,
-            path_state_dict_r = model_path
+            path_state_dict_r = model_nn_path
         ).to(device=device)
         else:
             model = FINN_DiffAD2ss(
@@ -296,10 +298,11 @@ def run_testing(print_progress=False, visualize=False, model_number=None):
     )
     print(f"Trainable model parameters: {pytorch_total_params}\n")
 
-    model.load_state_dict(th.load(os.path.join(os.path.abspath(""),
-                                              "checkpoints",
-                                              config.model.name,
-                                              config.model.name+".pt")))
+    #Training is done for R seperately (without integration)
+    # model.load_state_dict(th.load(os.path.join(os.path.abspath(""),
+    #                                           "checkpoints",
+    #                                           config.model.name,
+    #                                           config.model.name+".pt")))
     print(model.__dict__)
     model.eval()
 
@@ -670,8 +673,8 @@ def eval_Bayes_finn(net, t, u, n_runs, quantile = 0.05):
     y_preds = th.zeros((n_runs,u.size()[0],u.size()[1],u.size()[2]))
     with th.no_grad():
         for i in range(n_runs):
+            print(f"\r Run {i+1}/{n_runs}")
             y_preds[i] = net(t, u).detach()
-            print(f"\r Run {i}/{n_runs}")
 
     y_preds = y_preds.numpy()
     # Calculate mean and quantiles

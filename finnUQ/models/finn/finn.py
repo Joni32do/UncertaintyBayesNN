@@ -912,7 +912,7 @@ class FINN_DiffAD2ssBayes(FINN):
         if learn_r_hyd:
             self.func_r = self.function_learner().to(device=self.device)
             if path_state_dict_r is not None:
-                self.func_r.load_state_dict(path_state_dict_r)
+                self.func_r.load_state_dict(th.load(path_state_dict_r))
                 self.func_r.eval()
 
         if learn_g_hyd:

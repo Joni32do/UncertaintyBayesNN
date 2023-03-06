@@ -1,7 +1,7 @@
 {
     "data":{
         "n_train":101,
-        "n_bars":7,
+        "n_bars":15,
         "n_samples":100,
         "n_plot":200,
         "noise":0.01,
@@ -11,7 +11,7 @@
             "max":1
         },       
         "log":{
-            "min":-3,
+            "min":-4,
             "max":0
         },
         "params":{
@@ -23,9 +23,9 @@
         }
     },
     "training":{
-        "rho":0.002,
+        "rho":0.0001,
         "epochs":5000,
-        "pretrain_epochs":500,
+        "pretrain_epochs":4900,
         "learning_rate":0.001,
         "sort":true,
         "logging":false

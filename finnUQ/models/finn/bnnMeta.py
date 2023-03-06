@@ -404,7 +404,6 @@ if __name__ == '__main__':
 
         Horizontal:
             b_arc = 0.5
-
         Vertical:
             b_arc = [0, 0, 1, 0]
 
