@@ -43,22 +43,43 @@ np.random.seed(42)
 
 def generate_data(dic):
     '''
-    generates data similar to retardation factor
+    generatedata similar to retardation factor to 
+    adds
+        - training
+        - evaluation (with Bayes methods)
+        - plotting
+    data to dictionary
+
     parameters
-        bars - number of locations in input space
-        samples - number of data per bar
-        std - noise with deviation which scales with x
+        data distribution
+            o lin or log
+            o min and max value
+        for data types 
+            - training
+                o n samples
+            - evaluation
+                o bars - number of x locations
+                o samples - number of data per bar
+        noise
+            o noise factor
+                -> is input in noise function which scales with x
     '''
+    
+    ### Get number of samples
     #For training
+    n = dic["n_train"]
+
+    #For evaluating
     bars = dic["n_bars"]
     samples = dic["n_samples"]
+
     #For plotting
     n_plot = dic["n_plot"]
-    #Number of training points
-    n = bars * samples
+    
 
-    #lin or log
-    if dic["bars_log"]:
+    ###Distribute and calculate
+    # lin or log
+    if dic["is_log"]:
         val = dic["log"]
         fn = torch.logspace
     else:
@@ -66,7 +87,8 @@ def generate_data(dic):
         fn = torch.linspace
     
     #Calculate x
-    x = fn(val["min"], val["max"],bars).reshape((bars,1))
+    x_train = fn(val["min"], val["max"], n).reshape((n,1))
+    x_eval = fn(val["min"], val["max"],bars).reshape((bars,1))
     x_plot = fn(val["min"], val["max"],n_plot).reshape((n_plot,1))
 
     
@@ -83,46 +105,64 @@ def generate_data(dic):
     ###Calculate 1/R
 
     #For training
-    y = torch.zeros((bars,1))
-    y[x!=0] = 1/(1 + a * x[x!=0]**(beta-1))
+    y_train = torch.zeros((n,1))
+    y_train[x_train!=0] = 1/(1 + a * x_train[x_train!=0]**(beta-1))
+
+    #For evaluating
+    y_eval = torch.zeros((bars,1))
+    y_eval[x_eval!=0] = 1/(1 + a * x_eval[x_eval!=0]**(beta-1))
+
     #For plotting
     y_plot = torch.zeros((n_plot,1))
     y_plot[x_plot!=0] = 1/(1 + a * x_plot[x_plot!=0]**(beta-1))
 
     
-    ##Noise
-    #TODO: Noise function: x
-    noise = torch.randn((bars,samples)) * x * dic["noise"]
-    
-    #Automatch to shape (n,samples)
-    y = y + noise
-    y = torch.reshape(y,(n,1))
+    ### Noise
+    noise_fn = lambda x: x * dic["noise"]
 
-    #Match x to y
-    x_repeat = x.repeat_interleave(samples,0)
+    #Train
+    noise_train = torch.randn((n,1)) * noise_fn(x_train)
+    y_train = y_train + noise_train
     
+    #Eval
+    noise_eval = torch.randn((bars,samples)) * noise_fn(x_eval)
+    y_eval = y_eval + noise_eval  #Automatch to shape (bars,samples)
+
+    #Saving to dictionary
+    dic["x_train"] = x_train
+    dic["y_train"] = y_train
+
+    dic["x_eval"] = x_eval
+    dic["y_eval"] = y_eval
 
     dic["x_true"] = x_plot
     dic["y_true"] = y_plot
-
-    dic["x_single"] = x
-    dic["x_train"] = x_repeat
-    dic["y_train"] = y
-
+    
     return dic  
 
 
-def train_net(net, x_train, y_train, epochs, pretrain_epochs = 0, sort = False, logging = True):
+def train_net(net, x_train, y_train, hyper):
     '''
     Trains a Bayesian network (def line 16)
         - lr = 0.001
     '''
+    #Logging
+    logging = hyper["logging"]
+
+    #Hyperparameters
     
+    epochs = hyper["epochs"]
+    pretrain_epochs = hyper["pretrain_epochs"]
+    lr = hyper["learning_rate"]
+    sort = hyper["sort"]
+
+
+
     # Define the loss function and optimizer
     criterion = nn.MSELoss()
-    optimizer = torch.optim.Adam(net.parameters(), lr=0.01)
-    net.set_pretrain(True)
-
+    optimizer = torch.optim.Adam(net.parameters(), lr)
+    
+    
     def closure():
         optimizer.zero_grad()
 
@@ -134,7 +174,7 @@ def train_net(net, x_train, y_train, epochs, pretrain_epochs = 0, sort = False, 
         
         # Compute the KL divergence loss for the Bayesian self.layers TODO:
         kl_weight = 0.0
-        kl_divergence_loss = net.kl_loss(kl_weight)
+        kl_divergence_loss = net.kl_loss() * kl_weight
 
         # Backward pass
         loss = mse_loss + kl_divergence_loss
@@ -148,12 +188,14 @@ def train_net(net, x_train, y_train, epochs, pretrain_epochs = 0, sort = False, 
 
     # Train the net for 1000 epochs
     for epoch in range(epochs):
+        
         # Change from pretrain to train
         if epoch == pretrain_epochs:
             net.set_pretrain(False)
 
 
         mse = optimizer.step(closure)
+        
         if sort:
             net.sort_bias()
 
@@ -162,26 +204,31 @@ def train_net(net, x_train, y_train, epochs, pretrain_epochs = 0, sort = False, 
             print(f"\t \t Epoch {str(epoch + 1).rjust(len(str(epochs)),'0')}/{epochs}: Loss = {mse:.4f}")
 
             # for m in net.layers:
-            #     print(m.rho_w)
+            #     print(m.mu_b.data)
+            #     print(m.rho_w.data)
 
 
     return mse
 
 
-def eval_Bayes_net(net, x, samples, quantile = 0.05):
-    # Evaluate function using the Bayesian network   
-    y_preds = np.zeros((samples,x.size(dim=0)))
+def eval_Bayes_net(net, x_eval, samples, quantile = 0.025):
+    '''
+    Evaluates the input {x_eval} for {samples} times
+    (bars, samples)
+    '''  
+    bars = x_eval.size(dim = 0)
+    y_preds = np.zeros((bars, samples))
     for i in range(samples):
-        y_preds[i,:] = net.forward(torch.Tensor(x).unsqueeze(1)).detach().numpy().flatten()
+        y_preds[:,i] = net.forward(x_eval).detach().numpy().flatten()
          
     # Calculate mean and quantiles
-    mean = np.mean(y_preds, axis=0)
-    lower = np.quantile(y_preds, quantile, axis=0)
-    upper = np.quantile(y_preds, 1-quantile, axis=0)
+    mean = np.mean(y_preds, axis=1)
+    lower = np.quantile(y_preds, quantile, axis=1)
+    upper = np.quantile(y_preds, 1-quantile, axis=1)
     return y_preds,mean,lower,upper
 
 
-def calc_water(y_preds, y_train, samples):
+def calc_water(y_preds, y_eval):
     '''
     calculates for each bar (single 1D coordinate of input space) with samples the wasserstein_distance 
     
@@ -189,17 +236,15 @@ def calc_water(y_preds, y_train, samples):
         -average of wasserstein over all bars
     
     '''
-    bars = int(len(y_train)/samples)
+    assert np.shape(y_preds) == np.shape(y_eval)
+    
+    bars, samples = np.shape(y_preds)
     water = np.zeros(bars)
     for i in range(bars):
-        train_bar = y_train[i * samples:(i+1) * samples,0]
-        pred_bar = y_preds[:,i]
-        water[i] = wasserstein_distance(train_bar, pred_bar)
+        water[i] = wasserstein_distance(y_preds[i,:], y_eval[i,:])
     return np.mean(water)
-    
-    #wasserstein_distance
 
-def create_fig(data, mean ,lower, upper, path = None):
+def create_fig(data, y_preds, mean ,lower, upper, path = None):
     '''
     Plots results
 
@@ -210,14 +255,11 @@ def create_fig(data, mean ,lower, upper, path = None):
             o upper - Bayes-Net upper quantile (95%)
             o path - to store figure -> if None plot
     '''    
-    fig = plt.figure(figsize=(8,5))
+    fig,ax = plt.subplots(1,1,figsize=(8,5))
+    if data["is_log"]:
+        ax.set_xscale('log')
 
     ###Plot true function
-    plt.scatter(data["x_train"],
-                data["y_train"],
-                s = 2 ,
-                color = 'red',
-                label="Train data")
     
       #Helper
     x = data["x_true"].squeeze()
@@ -233,14 +275,35 @@ def create_fig(data, mean ,lower, upper, path = None):
 
 
     ###Plot BNN
-    plt.plot(data["x_single"], mean, label='Average Prediction')
-    plt.fill_between(data["x_single"].squeeze(), 
+    plt.plot(data["x_eval"], mean, label='Average Prediction')
+    plt.fill_between(data["x_eval"].squeeze(), 
                      lower.squeeze(),
                      upper.squeeze(), 
                      alpha=0.5, 
-                     label='5%-95% Quantile')
+                     label='2.5%-97.5% Quantile')
     
     
+    #Scatter
+    plt.scatter(data["x_train"],
+                data["y_train"],
+                s = 2 ,
+                color = 'green',
+                label="Train data")
+    
+    plt.scatter(data["x_eval"].repeat_interleave(data["n_samples"],0),
+                torch.reshape(data["y_eval"],(data["n_samples"] * data["n_bars"],1)),
+                s = 1 ,
+                color = 'blue',
+                label="stoch. dist.")
+    
+    plt.scatter(data["x_eval"].repeat_interleave(data["n_samples"],0)+0.002,
+                np.reshape(y_preds,(data["n_samples"] * data["n_bars"],1)),
+                s = 1 ,
+                color = 'orange',
+                label="stoch. dist. BNN")
+
+
+
     #Finalize
     plt.legend()
     if path is not None:
@@ -275,25 +338,22 @@ def experiment(arc, bayes_arc, t, data, hyper, path):
     mse = train_net(net, 
                     data["x_train"], 
                     data["y_train"], 
-                    hyper["epochs"], 
-                    hyper["pretrain_epochs"], 
-                    hyper["sort"])
+                    hyper)
     #TODO: Sample with MCMC 
         #...
 
 
     #Evaluation
     y_preds,mean,lower,upper = eval_Bayes_net(net,
-                                              data["x_single"],
+                                              data["x_eval"],
                                               data["n_samples"])
     
     water = calc_water(y_preds, 
-                       data["y_train"], 
-                       data["n_samples"])
+                       data["y_eval"])
 
 
     #Plotting
-    create_fig(data, mean, lower, upper, path_figure)
+    create_fig(data, y_preds, mean, lower, upper, path_figure)
 
     return mse, water
 
@@ -309,13 +369,11 @@ if __name__ == '__main__':
     
     
     #File managment
-    description = "X" + str(meta["data"]["n_bars"]) + \
-                  "_S" + str(meta["data"]["n_samples"]) + \
+    description = "X" + str(meta["data"]["n_train"]) + \
                   "_N" + str(meta["data"]["noise"])+ \
                   "_E" + str(meta["training"]["epochs"]) + \
-                  "_P" + str(meta["training"]["pretrain_epochs"]) + \
                   "_Rho" + str(meta["training"]["rho"])
-    if meta["data"]["bars_log"]:
+    if meta["data"]["is_log"]:
         description += "Log"
 
     '''
@@ -447,10 +505,39 @@ if __name__ == '__main__':
     else:
         assert len(architectures) == len(bayes_arcs)
         n_cases = len(architectures)
+        s_cases = (n_cases, tries)
+        
+        #Time
+        training_time = np.zeros(s_cases)
+        
+        #Error meassure
+        mse = np.zeros(s_cases)
+        wasserstein = np.zeros(s_cases)
+
 
         for i in range(n_cases):
-            #I could refactor and put here the same in as before
-            pass
+            arc = architectures[i]
+            bayes_arc = bayes_arcs[i]
+            print(f"Training architecture: {arc} with stochasticity {bayes_arc} model {i+1}/{n_cases}")
+
+            #Directories
+            path = os.path.join(main_path,"A_" + str(arc), "B_" + str(bayes_arc))
+            Path(path).mkdir(parents=True, exist_ok=True)
+
+
+            #Multiple experiments 
+            for t in range(tries):
+                sys.stdout.write(f"\r \t Run: {t+1}/{tries}")
+                start = time.time()
+
+                m, w  = experiment(arc, bayes_arc, t, data, hyper, path)
+                
+                mse[i,t] = m
+                wasserstein[i,t] = w
+                training_time[i,t] = time.time() - start
+            
+            
+            print(f"\n    Architecture took: {(np.sum(training_time[i,:])):.3f} seconds")
 
 
 
@@ -468,24 +555,30 @@ if __name__ == '__main__':
     total_time = np.sum(training_time)
     print(f"Total time: {np.around(total_time,0)} seconds -> {np.around(total_time/3600,1)} hours \n")
 
-    idx = np.unravel_index(np.argmin(wasserstein), wasserstein.shape)    
-    print("The best model is: \n \t Architecture: ",architectures[idx[0]],"\n \t Bayes Archi:", bayes_arcs[idx[1]], "\n at try", idx[2])
     
-    idx_avg = np.unravel_index(np.argmin(np.mean(wasserstein, axis=2)), wasserstein.shape) 
-    print("The best average model is: \n \t Architecture: ",architectures[idx_avg[0]],"\n \t Bayes Archi:", bayes_arcs[idx_avg[1]])
+    
+    idx = np.unravel_index(np.argmin(wasserstein), wasserstein.shape)    
+    idx_avg = np.unravel_index(np.argmin(np.mean(wasserstein, axis=-1)), wasserstein.shape) 
+    if all_combis:
+        print("The best model is: \n \t Architecture: ",architectures[idx[0]],"\n \t Bayes Archi:", bayes_arcs[idx[1]], "\n at try", idx[2])
+        print("The best average model is: \n \t Architecture: ",architectures[idx_avg[0]],"\n \t Bayes Archi:", bayes_arcs[idx_avg[1]])
+    else:
+        print(f"The best model is {idx_avg[:-1]} at try {idx_avg[-1]}")
 
     
 
     #Save numpy ndarrays
-    np.save(os.path.join(main_path, "mse"), mse)
-    np.save(os.path.join(main_path, "wasserstein"), wasserstein)
-    np.save(os.path.join(main_path, "training_time"), training_time)
+    numpy_path = os.path.join(main_path,"results")
+    Path(numpy_path).mkdir(parents=True, exist_ok=True)
+    np.save(os.path.join(numpy_path, "mse"), mse)
+    np.save(os.path.join(numpy_path, "wasserstein"), wasserstein)
+    np.save(os.path.join(numpy_path, "training_time"), training_time)
     
 
 
 
     # Saving the parameters from the meta.json file
-    #TODO: Write number of parameters and final time
+    #TODO: Write number of parameters
     meta["result"] = {"n_net": n_cases,
                       "time": total_time
                       }
@@ -493,12 +586,23 @@ if __name__ == '__main__':
     with open(os.path.join(main_path, "meta_params.json"), "w") as fp:
         json.dump(meta, fp)
 
+
     # Creating Excel Writer Object from Pandas  
     str_arcs = [str(i) for i in architectures]
-    str_bayes_arcs = [str(i) for i in bayes_arcs]
-    m_df = pd.DataFrame(np.median(mse,axis=2),        index = str_arcs, columns= str_bayes_arcs)
-    w_df = pd.DataFrame(np.median(wasserstein,axis=2),index = str_arcs, columns= str_bayes_arcs)
-    t_df = pd.DataFrame(np.sum(training_time,axis=2), index = str_arcs, columns= str_bayes_arcs)
+    
+    if all_combis:
+        str_bayes_arcs = [str(i) for i in bayes_arcs]
+    else:
+        str_bayes_arcs = ["experiment"]
+        for i, b_arc in enumerate(bayes_arcs):
+            str_arcs[i] = str_arcs[i] + str(b_arc)
+
+    print(str_arcs)
+    print(str_bayes_arcs)
+
+    m_df = pd.DataFrame(np.median(mse,axis=-1),        index = str_arcs, columns= str_bayes_arcs)
+    w_df = pd.DataFrame(np.median(wasserstein,axis=-1),index = str_arcs, columns= str_bayes_arcs)
+    t_df = pd.DataFrame(np.sum(training_time,axis=-1), index = str_arcs, columns= str_bayes_arcs)
  
     
     with pd.ExcelWriter(os.path.join(main_path, "results.xlsx"), engine='xlsxwriter') as writer:

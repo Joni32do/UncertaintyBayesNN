@@ -787,16 +787,44 @@ class FINN_DiffAD2ssBayes(FINN):
     implementation.
     This class inherits all parameter from the parent FINN class.
     """
-    def __init__(self, u:th.Tensor, D:np.ndarray, BC:np.ndarray, dx: float, 
-                 layer_sizes:list, device:str, rho_s:np.ndarray, f:np.ndarray,
-                 k_d:np.ndarray, beta:np.ndarray, n_e:np.ndarray, alpha:np.ndarray,
-                 v_e:np.ndarray, t_steps:int, x_steps_soil:int, learn_f_hyd:bool, learn_r_hyd:bool,
-                 learn_g_hyd:bool, learn_alpha:bool, learn_beta:bool, learn_f:bool, 
-                 learn_k_d:bool,sand:bool, D_sand:Optional[np.ndarray]=None, 
-                 n_e_sand:Optional[np.ndarray]=None, x_start_soil:Optional[int]=None, 
-                 x_stop_soil:Optional[int]=None, alpha_l_sand:Optional[np.ndarray]=None,
-                 v_e_sand:Optional[np.ndarray]=None, mode="train", config=None, learn_coeff=True, learn_stencil=False, 
-                 bias=True, sigmoid=True, bayes_arc=[0.5], state_dict_r = None):
+    def __init__(self, 
+                 u:th.Tensor, 
+                 D:np.ndarray, 
+                 BC:np.ndarray, 
+                 dx: float, 
+                 layer_sizes:list, 
+                 device:str, 
+                 rho_s:np.ndarray, 
+                 f:np.ndarray,
+                 k_d:np.ndarray, 
+                 beta:np.ndarray, 
+                 n_e:np.ndarray, 
+                 alpha:np.ndarray,
+                 v_e:np.ndarray, 
+                 t_steps:int, 
+                 x_steps_soil:int, 
+                 learn_f_hyd:bool, 
+                 learn_r_hyd:bool,
+                 learn_g_hyd:bool, 
+                 learn_alpha:bool, 
+                 learn_beta:bool, 
+                 learn_f:bool, 
+                 learn_k_d:bool,
+                 sand:bool, 
+                 D_sand:Optional[np.ndarray]=None, 
+                 n_e_sand:Optional[np.ndarray]=None, 
+                 x_start_soil:Optional[int]=None, 
+                 x_stop_soil:Optional[int]=None, 
+                 alpha_l_sand:Optional[np.ndarray]=None,
+                 v_e_sand:Optional[np.ndarray]=None, 
+                 mode="train", 
+                 config=None, 
+                 learn_coeff=True, 
+                 learn_stencil=False, 
+                 bias=True, 
+                 sigmoid=True, 
+                 bayes_arc=[0.5], 
+                 state_dict_r = None):
         """Constructor of FINN_AD2ss class
 
         Args:
@@ -988,34 +1016,37 @@ class FINN_DiffAD2ssBayes(FINN):
             cw_soil= c[self.x_start:self.x_stop]
             sk_soil = sk[self.x_start:self.x_stop]
             
-            # Apply the ReLU function for upwind scheme to prevent numerical
-            # instability
+            # Module R          - Apply the ReLU function for upwind scheme
+            #                     to prevent numerical instability
             v_soil = self.v_e
             v_soil_plus = th.relu(v_soil)
             
             # remains always zero since v_soil > 0
             v_soil_min = -th.relu(-v_soil)
 
+
+
             v_sand = self.v_e_sand
             v_sand_plus = th.relu(v_sand)
-            
-            # If training with dummy parameter, uncomment needed, since at least
-            # one parameter has to be added to computational graph
-            # v_sand_min = -th.relu(-v_sand) + self.z
             
             # remains always zero since v_sand > 0
             v_sand_min = -th.relu(-v_sand)
 
+            # If training with dummy parameter, uncomment needed, since at least
+            # one parameter has to be added to computational graph
+            # v_sand_min = -th.relu(-v_sand) + self.z
             
-            # Example of slicing through torch tensors. With corresponding start,
-            # stop and X_STEPS indices. 
-            # start: 7, stop: 48, X_STEPS: 56
-            # c[:self.x_start-1] = c1 ... c6
-            # c[1:self.x_start] = c2 ... c7
-            # c[self.x_start:self.x_stop] = c8 ... c48
-            # c[self.x_stop+1:] = c50 ... c56
-            # c[self.x_stop:-1] = c49 ... c55
-            # c[self.x_stop:]) = c49 ... c56#
+            """   
+            Example of slicing through torch tensors. With corresponding start,
+            stop and X_STEPS indices. 
+            start: 7, stop: 48, X_STEPS: 56
+            c[:self.x_start-1] = c1 ... c6
+            c[1:self.x_start] = c2 ... c7
+            c[self.x_start:self.x_stop] = c8 ... c48
+            c[self.x_stop+1:] = c50 ... c56
+            c[self.x_stop:-1] = c49 ... c55
+            c[self.x_stop:]) = c49 ... c56
+            """
 
            # top boundary fluxes
             Dsxx = self.D_sand/(self.dx**2)
@@ -1035,30 +1066,16 @@ class FINN_DiffAD2ssBayes(FINN):
             top_flux_sand_bot = Dsxx * (self.stencil[0]*c[self.x_stop:]+self.stencil[1]*c[self.x_stop-1:-1]) - \
                                 vsx * (-self.stencil[0]*c[self.x_stop:]-self.stencil[1]*c[self.x_stop-1:-1])
 
-            # # Better readability
-            # top_bound_flux = (Dsxx*(self.BC[0] -c[0]) + 
-            #                  vsx *(self.BC[0] - c[0] )).unsqueeze(0)
             
-            # top_flux_sand_top = Dsxx*(c[:self.x_start-1] -c[1:self.x_start]) + \
-            #                     vsx*(c[:self.x_start-1] - c[1:self.x_start])
-            
-            # top_flux_soil = Dxx *(c[self.x_start-1:self.x_stop-1] - c[self.x_start:self.x_stop]) + \
-            #                  vx *(c[self.x_start-1:self.x_stop-1] - c[self.x_start:self.x_stop])
-            
-            # top_flux_sand_bot = Dsxx*(c[self.x_stop-1:-1] - c[self.x_stop:]) + \
-            #                     vsx *(c[self.x_stop-1:-1] - c[self.x_stop:])
-            
-            # top_flux = th.cat((top_bound_flux, top_flux_sand_top, top_flux_soil, top_flux_sand_bot))
+            """ more compact:
+            flux_fac_sand = Dsxx+vsx
+            flux_fac_soil = Dxx+vx
 
-            # # even more compact
-            # flux_fac_sand = Dsxx+vsx
-            # flux_fac_soil = Dxx+vx
-
-            # top_bound_flux =   flux_fac_sand*(self.BC[0] -c[0]).unsqueeze(0)
-            # top_flux_sand_top =flux_fac_sand*(c[:self.x_start-1] -c[1:self.x_start])            
-            # top_flux_soil =    flux_fac_soil*(c[self.x_start-1:self.x_stop-1] - c[self.x_start:self.x_stop])
-            # top_flux_sand_bot =flux_fac_sand*(c[self.x_stop-1:-1] - c[self.x_stop:])
-            
+            top_bound_flux =   flux_fac_sand*(self.BC[0] -c[0]).unsqueeze(0)
+            top_flux_sand_top =flux_fac_sand*(c[:self.x_start-1] -c[1:self.x_start])            
+            top_flux_soil =    flux_fac_soil*(c[self.x_start-1:self.x_stop-1] - c[self.x_start:self.x_stop])
+            top_flux_sand_bot =flux_fac_sand*(c[self.x_stop-1:-1] - c[self.x_stop:])
+            """
             top_flux = th.cat((top_bound_flux, top_flux_sand_top, top_flux_soil, top_flux_sand_bot))
             
 
@@ -1087,25 +1104,12 @@ class FINN_DiffAD2ssBayes(FINN):
 
 
             # PHYSICAL INFORMATION:
-            # F(c) occurs in contaminant soil layer. In sand holds F(c) = 0, no
-            # functional relation can be learned in the sand.
-            if not self.learn_f_hyd:
-                f_hyd = th.zeros(self.Nx)
-                f_hyd[self.x_start:self.x_stop] = -alpha_mod*self.rho_s/self.n_e*(1-f_mod)*(k_d_mod*cw_soil**(beta_mod-1))    
-            else:
-                # According to definitions F(c) >= 0, scaling is needed since potentially
-                # larger output than sigmoid (0 < sig(x) < 1)
-                time_vec = th.ones([len(cw_soil)])*t
-                t_c = th.stack((cw_soil, time_vec), dim=1)
-                f_hyd = th.zeros(self.Nx)
-                f_hyd[self.x_start:self.x_stop] = (-self.func_f(t_c.float())*th.abs(self.f_fac))[:,0]
-
-            # PHYSICAL INFORMATION:
             # R(C) occurs in contaminant soil layer. In sand holds R(c) = 1, no
             # functional relation can be learned in the sand.
             if not self.learn_r_hyd:
                 ret = th.ones(self.Nx)
-                ret[self.x_start:self.x_stop] = (f_mod*(k_d_mod*beta_mod*cw_soil**(beta_mod-1))*(self.rho_s/self.n_e))+1
+                a =f_mod*k_d_mod*beta_mod
+                ret[self.x_start:self.x_stop] = 1/(1+(a*cw_soil**(beta_mod-1)))
             else:
                 # According to definitions R(c) >= 1, scaling is needed since potentially
                 # larger output than sigmoid (0 < sig(x) < 1)
@@ -1121,6 +1125,25 @@ class FINN_DiffAD2ssBayes(FINN):
                 # ret[self.x_start:self.x_stop] = 1+self.func_r(cw_soil[:,None])*(10**self.ret_fac)
                 ret[self.x_start:self.x_stop] = self.func_r(cw_soil[:,None])
                 ret = ret.squeeze(-1)
+
+
+
+
+            # PHYSICAL INFORMATION:
+            # F(c) occurs in contaminant soil layer. In sand holds F(c) = 0, no
+            # functional relation can be learned in the sand.
+            if not self.learn_f_hyd:
+                f_hyd = th.zeros(self.Nx)
+                f_hyd[self.x_start:self.x_stop] = -alpha_mod*self.rho_s/self.n_e*(1-f_mod)*(k_d_mod*cw_soil**(beta_mod-1))    
+            else:
+                # According to definitions F(c) >= 0, scaling is needed since potentially
+                # larger output than sigmoid (0 < sig(x) < 1)
+                time_vec = th.ones([len(cw_soil)])*t
+                t_c = th.stack((cw_soil, time_vec), dim=1)
+                f_hyd = th.zeros(self.Nx)
+                f_hyd[self.x_start:self.x_stop] = (-self.func_f(t_c.float())*th.abs(self.f_fac))[:,0]
+
+
             
             # PHYSICAL INFORMATION:
             # G(s_k) occurs in contaminant soil layer. In sand holds G(s_k) = 0,
@@ -1138,9 +1161,9 @@ class FINN_DiffAD2ssBayes(FINN):
             flux_c = ret*(top_flux + bot_flux+f_hyd*c+g_hyd)
 
             # Calculate sk flux using F, G, and R
-            flux_sk=th.zeros(self.Nx)
-            flux_sk[self.x_start:self.x_stop] = -f_hyd[self.x_start:self.x_stop]*(self.n_e/self.rho_s)*cw_soil-g_hyd[self.x_start:self.x_stop]*(self.n_e/self.rho_s) 
+            flux_sk=th.zeros(self.Nx) 
             flux_sk[self.x_start:self.x_stop] = -(self.n_e/self.rho_s)*(f_hyd[self.x_start:self.x_stop]*cw_soil + g_hyd[self.x_start:self.x_stop])
+            
             flux = th.stack((flux_c, flux_sk), dim=len(c.size()))
             
             

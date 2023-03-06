@@ -34,27 +34,27 @@ bayes = True
 pretrain = True
 train = "MC" #"MC" #Or 'VI'
 
-draws = 1000
+draws = 100
 
 
 n_hidden = 3
 
 #Initial Value
 mu1 = 0
-sigma1 = 0.1
+sigma1 = 1
 mu2 = 0
-sigma2 = 0.1
+sigma2 = 1 #0.1
 
 
 
 ## Hyperparameters
-epoch = 10000
+epoch = 5000
 preTrainingEpoch = 100000
-n_chains = 1000
+n_chains = 10000
 
 
 loss_fun = nn.MSELoss()
-lr = 0.01
+lr = 0.2
 
 
 
@@ -100,7 +100,7 @@ if pretrain:
     filename = filename + "P"
 
 
-pathModel = Path("./simpleReg/models/")
+pathModel = Path("./models/")
 pathTo = os.path.join(pathModel,filename+'.pth')
 pathTo_pre = os.path.join(pathModel,filename+'_pre.pth')
 
@@ -241,6 +241,8 @@ markov_chain = None #ugly
 
 
 doTrain = train_even_when_exist or not os.path.exists(pathTo) or train == 'MC'
+print(doTrain)
+
 if bayes:
     if doTrain:
 
@@ -309,7 +311,7 @@ if bayes:
                 #If loss_old and new are close acc is still high - simple approach is to use sqrt as bijective function
                 acc = torch.log(loss_new)/torch.log(loss_old)
                 print(acc, step/(tries+1), step)
-                if acc >= 0.9999 + 0.0001*torch.rand(1): # torch.rand(1)
+                if acc >= 0.95 + 0.05*torch.rand(1): # torch.rand(1)
                     loss_old = loss_new
                     loss_collection.append(loss_new.detach().numpy())
                     print(step)
@@ -384,9 +386,11 @@ error_test = np.abs(y_test-y_pred_avg_test)
 y_test_no_noise = f(x_test,aleatoric=0,option=option).flatten()
 
 #Quantile
-quant = 0.05
-q_up_test = np.quantile(y_stoch_test - np.reshape(y_pred_avg_test,(1000,1,1)),q = 1-quant,axis=-1)
-q_low_test = np.quantile(y_stoch_test - np.reshape(y_pred_avg_test,(1000,1,1)),q = quant,axis=-1)
+quant = 0.025
+upper = np.quantile(y_stoch_test,q = 1-quant,axis=-1).flatten()
+lower = np.quantile(y_stoch_test,q = quant,axis=-1).flatten()
+q_up_test = np.quantile(y_stoch_test - np.reshape(y_pred_avg_test,(1000,1,1)),q = 1-quant,axis=-1).flatten()
+q_low_test = np.quantile(y_stoch_test - np.reshape(y_pred_avg_test,(1000,1,1)),q = quant,axis=-1).flatten()
 
 
 
@@ -418,10 +422,10 @@ x_test = x_test.detach().numpy().copy().flatten()
 
 
 ### P L O T T I N G
-pathFigure = os.path.join(Path("./simpleReg/figures/"),filename)
+pathFigure = os.path.join(Path("./figures/"),filename)
 Path(pathFigure).mkdir(parents=True, exist_ok=True)
 
-show_examples=int(np.ceil(np.log(draws)))
+show_examples= 3 #int(np.ceil(np.log(draws)))
 
 
 
@@ -443,7 +447,7 @@ if bayes and doTrain:
 ### 1D Plot
 if n_in==1:
     #Plot function with data and margins
-    fig = plt.figure(figsize=(8,5))
+    """ fig = plt.figure(figsize=(8,5))
     axF = fig.add_subplot(1,1,1)
     axF.fill_between(x_test, 
         y_test_no_noise + 2* aleatoric_test, 
@@ -456,7 +460,7 @@ if n_in==1:
     plt.legend()
     plt.xlim(-0.2,1.8)
     plt.ylim(-0.5,1.5)
-    plt.savefig(os.path.join(pathFigure,"functionWithData.pdf"))
+    plt.savefig(os.path.join(pathFigure,"functionWithData.pdf")) """
 
     #Prediction Curves
     fig = plt.figure(figsize=(8,5))
@@ -470,15 +474,16 @@ if n_in==1:
     ax.fill_between(x_test, (y_pred_avg_test - 2* std_test).flatten(),
                             y_pred_avg_test.flatten() + 2* std_test.flatten(),  
                             linewidth=0,alpha = 0.2,color = 'lightcoral')
+    ax.fill_between(x_test, lower, upper, linewidth = 0, alpha = 0.2, color = 'mediumpurple')
     ax.plot(x_test, y_pred_avg_test, linewidth = 2, color = 'tab:red', label="$y_{avg}$")
     colorArr = ["slateblue","mediumpurple", "orchid","plum","lightsteelblue","slateblue","mediumpurple", "orchid","plum","lightsteelblue"]
     if bayes:
         for i in range(show_examples):
-            ax.plot(x_test, y_stoch_test[:,:,i], linestyle='dashed',linewidth=1, color=colorArr[i],label="$y_{pred"+str(i+1)+"}$")
-    if pretrain and train == 'MC':
-        ax.plot(x_test,y_pred_pretrain,color='tab:purple',label='pretrain')
+            ax.plot(x_test, y_stoch_test[:,:,i], linestyle='dashed',linewidth=1, color=colorArr[i],label="$y_{"+str(i+1)+"}$")
+    # if pretrain and train == 'MC':
+    #     ax.plot(x_test,y_pred_pretrain,color='tab:purple',label='pretrain')
     plt.legend()
-    plt.title("Prediction Curves")
+    # plt.title("Prediction Curves")
     plt.xlim(-0.2,1.8)
     plt.ylim(-0.5,1.5)
     plt.savefig(os.path.join(pathFigure,"predictionCurves.pdf"))
@@ -504,11 +509,11 @@ if n_in==1:
         ax.plot(x_test, y_stoch_test[:,:,i] - y_pred_avg_test,linewidth=1,linestyle='dashed') # label="Deviation from average " + str(i)
    
     ax.fill_between(x_test, 2*std_test.flatten(), -2*std_test.flatten(),alpha = 0.4, 
-        linewidth = 0,color = 'lightcoral',label='standard deviation')
+        linewidth = 0,color = 'lightcoral',label='$2\sigma$ region')
     ax.fill_between(x_test, q_up_test.flatten(), q_low_test.flatten(),alpha = 0.4, 
-        linewidth = 0,color = 'plum',label='0.05 quantiles')
+        linewidth = 0,color = 'plum',label='2.5% - 97.5% quantiles')
     plt.legend()
-    plt.title("Deviation from average for single draw")
+    # plt.title("Deviation from average for single draw")
     plt.savefig(os.path.join(pathFigure,"Deviation.pdf"))
     # plt.savefig(os.path.join(pathFigure,"Deviation.svg"))
     

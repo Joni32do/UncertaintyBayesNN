@@ -116,7 +116,7 @@ class LinearBayes(nn.Module):
         
         return sorted_indices
   
-    def kl_loss(self, kl_weight):
+    def kl_loss(self):
         '''
         Evaluates the Kullback-Leibler divergence loss
 
@@ -138,7 +138,7 @@ class LinearBayes(nn.Module):
         loss -= 0.5 * (self.n_out *np.log(2*np.pi) + self.noise_b.sample().pow(2).sum()) - self.rho_w.sum()
 
 
-        return loss * kl_weight
+        return loss
     
     def forward(self, x):
         if self.pretrain:
@@ -146,6 +146,8 @@ class LinearBayes(nn.Module):
         else:
              self.sample()
         return F.linear(x, self.weights, self.bias)
+
+
 
 """       
         self.prior_mu = prior_mu

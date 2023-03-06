@@ -29,16 +29,20 @@ class BayesianNet(nn.Module):
 
             - rho: Initial variation of params
                     o TODO: rho_w \neq rho_b
-        
+
+        Always starts training in pretrain and must be turned off for Bayes learning
         
         '''
+        #Initialize
         self.arc=arc
         self.layers_n = len(arc)
-        self.activation_fn = torch.tanh
+        self.activation_fn = torch.nn.LeakyReLU()
         
+        #For scalar extent to array
         if len(bayes_arc) == 1:
             bayes_arc = np.ones(len(arc)) * bayes_arc[0]
 
+        #creates a list with Linear Bayes layers of specified architectur
         layers = []
         for i in range(self.layers_n-1):
             layers.append(LinearBayes(arc[i],arc[i+1],
@@ -46,6 +50,9 @@ class BayesianNet(nn.Module):
                             bayes_factor = bayes_arc[i+1], pretrain=True))
                 
         self.layers = nn.ModuleList(layers)
+        
+        #Always starts in pretrain mode
+        self.set_pretrain(True)
 
 
     def sort_bias(self):
@@ -57,10 +64,10 @@ class BayesianNet(nn.Module):
         for layer in self.layers:
             layer.pretrain = pretrain
 
-    def kl_loss(self, kl_weight):
+    def kl_loss(self):
         loss = 0
         for layer in self.layers:
-            loss += layer.kl_loss(kl_weight)
+            loss += layer.kl_loss()
         return loss
     
     def forward(self, x):
