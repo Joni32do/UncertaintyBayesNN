@@ -335,21 +335,17 @@ def experiment(arc, bayes_arc, t, data, hyper, path):
             
 
     #Training
-    mse = train_net(net, 
-                    data["x_train"], 
-                    data["y_train"], 
-                    hyper)
+    mse = train_net(net, data["x_train"], data["y_train"], hyper)
     #TODO: Sample with MCMC 
         #...
+    #Save state dict - #TODO: overwrites
+    torch.save(net.state_dict(), os.path.join(path,"model.pth"))
 
 
     #Evaluation
-    y_preds,mean,lower,upper = eval_Bayes_net(net,
-                                              data["x_eval"],
-                                              data["n_samples"])
+    y_preds,mean,lower,upper = eval_Bayes_net(net, data["x_eval"], data["n_samples"])
     
-    water = calc_water(y_preds, 
-                       data["y_eval"])
+    water = calc_water(y_preds, data["y_eval"])
 
 
     #Plotting

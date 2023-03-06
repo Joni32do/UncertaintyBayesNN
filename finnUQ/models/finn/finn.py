@@ -824,7 +824,7 @@ class FINN_DiffAD2ssBayes(FINN):
                  bias=True, 
                  sigmoid=True, 
                  bayes_arc=[0.5], 
-                 state_dict_r = None):
+                 path_state_dict_r = None):
         """Constructor of FINN_AD2ss class
 
         Args:
@@ -911,9 +911,9 @@ class FINN_DiffAD2ssBayes(FINN):
 
         if learn_r_hyd:
             self.func_r = self.function_learner().to(device=self.device)
-            if state_dict_r is not None:
-                self.func_r.load_state_dict(state_dict_r)
-            self.ret_fac = nn.Parameter(th.tensor([1], dtype=th.double))
+            if path_state_dict_r is not None:
+                self.func_r.load_state_dict(path_state_dict_r)
+                self.func_r.eval()
 
         if learn_g_hyd:
             self.func_g = self.function_learner().to(device=self.device)

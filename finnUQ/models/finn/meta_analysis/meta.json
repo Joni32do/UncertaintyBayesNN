@@ -24,9 +24,9 @@
     },
     "training":{
         "rho":0.002,
-        "epochs":500,
+        "epochs":5000,
         "pretrain_epochs":500,
-        "learning_rate":0.01,
+        "learning_rate":0.001,
         "sort":true,
         "logging":false
     },

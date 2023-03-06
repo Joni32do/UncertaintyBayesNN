@@ -96,6 +96,8 @@ def run_testing(print_progress=False, visualize=False, model_number=None):
             
         # Initialize and set up the model
         if config.bayes.is_bayes:
+            model_path = config.bayes.model_loc
+
             model = FINN_DiffAD2ssBayes(
             u=u,
             D=np.array(params.alpha_l*params.v_e+params.D_e),
@@ -132,7 +134,8 @@ def run_testing(print_progress=False, visualize=False, model_number=None):
             learn_stencil=False,
             bias=True,
             sigmoid=True,
-            bayes_arc = config.bayes.bayes_arc
+            bayes_arc = config.bayes.bayes_arc,
+            path_state_dict_r = model_path
         ).to(device=device)
         else:
             model = FINN_DiffAD2ss(

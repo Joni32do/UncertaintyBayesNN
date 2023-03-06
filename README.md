@@ -1,61 +1,56 @@
 # UncertaintyBayesNN
 Contains all the code of my bachelor thesis **Uncertainty quantification using bayesian modeling for finite volume neural networks** created at the LS3 in Stuttgart.
 
-## Introduction into Uncertainty
-
-Perhabs I will firstfully explore how to meassure uncertainty in a dataset and introduce some common meassures from statistics. This would be a good opportunity to explain:
-
-
-* Sensitivity and Specificity
-* Entropy
-* ROC (Receiver Operator Characteistic) and Calibration Curve (Check if indeed they represent the same dynamic)
-* AOC (Area under the curve)
-
-
-## Introduction into Neural Networks
-
-A small introduction into NN which I will use to give a brief insight in:
-
-* Architecture
-* Data-Set (maybe DataLoader,...)
-* Hyperparameter tuning:
-  * Learning rate (+ schedule)
-  * Optimizer
-  * Drop-Out
-  * Gamma
-  * Early stopping
-* Loss
-* Regularization
-* Ensemble Learning (which I will use as a bridge to motivate BNN)
 
 
 ## Bayesian Neural Networks
 
-Probability distribution on parameters (or activation functions which can be choosen such that they are equivilant)
+It is expected that you have a basic knowledge of neural networks. Otherwise they are shortly explained in the accompianing thesis.
 
-## TODO:
-- Varying Architecture
-- More difficult functions (R^n->R^m, PDEs)
+This bachelor thesis uses stochastic neural networks called BNN(Bayesian neural network). The key difference is that the parameters (weights and biases) have a probability distribution and not just single fixed value.
 
-Training
+Two methods:
 
-- Variational Inference:
-     * Different models of BayesLayer
-     * Training algorithms
-- MCMC:
-     * Metropolis Hastings
-     * Hamiltonian
-     * NUTS
+- Training -- with Variational Inference:
+     * Expects some distribution which can be describe by a few parameters e.g. Normal
+     * (variational) Parameters can be optimized like in NN 
 
-Inference
 
-- Performance testing
-     * Calibration curve
-     * AUC and Abbreviation
+- Sampling -- with Monte Carlo Markov Chains (MCMC):
+     * Evaluates with random weights in a chain
+     * Accepts to the chain if proposal according to current step is "better"
+     * Curse of dimensions make this scale very bad
+     * Methods for sampling are:
+         * Metropolis Hastings
+         * Hamiltonian
+         * Crank-Niccolson
+
+
+
+## Meta analysis for best BNN for Retardation Function
+
+* Trains stochasticly with MSE
+* Uses the Wasserstein distance to compare actual distribution and distribution of bnn
+* Trained architectures:
+    *  [[1, 32, 1],
+      [1, 8, 8, 1],
+      [1, 4, 9, 4, 1],
+      [1, 8, 4, 8, 1]]
+    * Horizontal bayes
+      * [[0], [0.25], [0.5], [0.75], [1]]
+    * Vertical bayes
+      * [[0, 0, 1],
+      [0, 0, 1, 0],
+      [0, 0, 0, 1, 0],
+      [0, 0, 1, 0, 0]]
+      * Special case: Last Layer only
+    * Sparse with high uncertainty (rho)
 
 ## FINN
 
-I have to discuss this with Nils -> Many methods are already implemented
+* Extends the two sided sorption approach of Gültig
+* UQ is done with best BNN from Meta analysis
+
 
 
 
