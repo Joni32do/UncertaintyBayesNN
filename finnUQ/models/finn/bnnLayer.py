@@ -38,8 +38,8 @@ class LinearBayes(nn.Module):
             bayes_factor = int(bayes_factor * n_out)
         #Neurons
         self.is_bayes = torch.zeros(n_out,1)
-        self.is_bayes_w = 
-        self.is_bayes_b = 
+        # self.is_bayes_w = 
+        # self.is_bayes_b = 
         if bayes_factor != 0:
              self.is_bayes[:int(bayes_factor)] = 1
 
