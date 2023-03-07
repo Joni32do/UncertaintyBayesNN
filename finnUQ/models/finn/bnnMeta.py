@@ -295,13 +295,19 @@ def create_fig(data, y_preds, mean ,lower, upper, path = None):
                 color = 'green',
                 label="Train data")
     
-    plt.scatter(data["x_eval"].repeat_interleave(data["n_samples"],0),
+    
+    x_rep = data["x_eval"].repeat_interleave(data["n_samples"],0)
+    side_slide = 0.002
+    
+    if data["is_log"]:
+        side_slide = 0.05 * x_rep
+    plt.scatter(x_rep,
                 torch.reshape(data["y_eval"],(data["n_samples"] * data["n_bars"],1)),
                 s = 1 ,
                 color = 'blue',
                 label="stoch. dist.")
     
-    plt.scatter(data["x_eval"].repeat_interleave(data["n_samples"],0)+0.002,
+    plt.scatter(x_rep + side_slide,
                 np.reshape(y_preds,(data["n_samples"] * data["n_bars"],1)),
                 s = 1 ,
                 color = 'orange',
