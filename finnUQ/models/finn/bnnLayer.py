@@ -38,6 +38,8 @@ class LinearBayes(nn.Module):
             bayes_factor = int(bayes_factor * n_out)
         #Neurons
         self.is_bayes = torch.zeros(n_out,1)
+        self.is_bayes_w = 
+        self.is_bayes_b = 
         if bayes_factor != 0:
              self.is_bayes[:int(bayes_factor)] = 1
 
@@ -61,10 +63,14 @@ class LinearBayes(nn.Module):
         self.n_out = n_out
 
         #Priors
-        self.prior_mu = mu_w_prior
-        self.prior_sigma = torch.log(1+torch.exp(rho_w_prior))
+        self.mu_w_prior = mu_w_prior
+        self.sigma_w_prior = torch.log(1+torch.exp(rho_w_prior))
+
+        self.mu_b_prior = mu_b_prior
+        self.sigma_b_prior = torch.log(1+torch.exp(rho_b_prior))
 
 
+        #Initialize distribution as priors
         #Weights
         self.mu_w = nn.Parameter(mu_w_prior)
         self.rho_w = nn.Parameter(rho_w_prior)
@@ -126,16 +132,26 @@ class LinearBayes(nn.Module):
         I think I only should penalize if sigma is to low
 
         '''
-        # lhood_w = Normal(self.prior_w,self.prior_sig_w).log_prob(self.weights).sum()
-        # lhood_b = Normal(self.prior_b,self.prior_sig_b).log_prob(self.bias).sum()
-        loss = 0
-        #Weights
-        loss += 0.5*self.weights.pow(2).sum()/(self.prior_mu**2).sum()
-        loss -= 0.5 * (self.n_out *np.log(2*np.pi) + self.noise_w.sample().pow(2).sum()) - self.rho_w.sum()
+        
+        sigma_w = torch.log(1 + torch.exp(self.rho_w))
+        #Helper
+        s_div = self.sigma_w_prior/ sigma_w
+        m_dif = self.mu_w_prior - self.mu_w
+        loss = 2 * (torch.log(s_div) - 1 + s_div.pow(-2) + ((m_dif)/self.sigma_w_prior).pow(2)).sum()
 
-        #Bias
-        loss += 0.5*self.bias.pow(2).sum()/(self.prior_mu**2).sum()
-        loss -= 0.5 * (self.n_out *np.log(2*np.pi) + self.noise_b.sample().pow(2).sum()) - self.rho_w.sum()
+
+        #Same calculation for bias
+        sigma_b = torch.log(1 + torch.exp(self.rho_b))
+        # Helper
+        s_div = self.sigma_b_prior/ sigma_b
+        m_dif = self.mu_b_prior - self.mu_b
+        loss += 2 * (torch.log(s_div) - 1 + s_div.pow(-2) + ((m_dif)/self.sigma_b_prior).pow(2)).sum()
+        #          -- Dieser Teil is für Standardabweichung ---- Dieser Teil für Mittelwerte ----- 
+        
+        #Wenn Neuronen ausgeschalten sind, ist ihr prior ihr rho und damit ist der erste Teil 0 -> passt!
+        
+        
+        
 
 
         return loss
@@ -207,7 +223,33 @@ self.prior = torch.distributions.Normal(0, prior_var)
 		self.addLoss(lambda s : -self.out_features/2*np.log(2*np.pi) - 0.5*s.samples['wNoiseState'].pow(2).sum() - s.lweights_sigma.sum())
 
 			self.addLoss(lambda s : 0.5*s.getSampledBias().pow(2).sum()/biasPriorSigma**2)##
-			self.addLoss(lambda s : -self.out_features/2*np.log(2*np.pi) - 0.5*s.samples['bNoiseState'].pow(2).sum() - self.lbias_sigma.sum()) """
+			self.addLoss(lambda s : -self.out_features/2*np.log(2*np.pi) - 0.5*s.samples['bNoiseState'].pow(2).sum() - self.lbias_sigma.sum()) 
+            
+            
+            
+# # kl = 0.5 * (2 * torch.log(sigma_prior / sigma) - 1 + (sigma / sigma_prior).pow(2) + ((mu_prior - mu) / sigma_prior).pow(2)).sum() 
+        # # kl_divergence(self.weight, F.softplus(self.log_sigma),
+        # #               torch.zeros_like(self.weight).to(self.weight.device), 
+        # #               F.softplus(torch.ones_like(self.log_sigma)*self.log_sigma_prior).to(self.weight.device))
+        # # Das für weights und biases
+        # #Weights
+
+
+
+        # loss += 0.5*self.weights.pow(2).sum()/(self.prior_mu**2).sum()
+        # loss -= 0.5 * (self.n_out *np.log(2*np.pi) + self.noise_w.sample().pow(2).sum()) - self.rho_w.sum()
+
+        # #Bias
+        # loss += 0.5*self.bias.pow(2).sum()/(self.prior_mu**2).sum()
+        # loss -= 0.5 * (self.n_out *np.log(2*np.pi) + self.noise_b.sample().pow(2).sum()) - self.rho_b.sum()            
+            
+            
+            
+            
+            
+            
+            
+"""
 	
 '''
         print("Before Sort:")

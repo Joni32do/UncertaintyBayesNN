@@ -683,6 +683,8 @@ def eval_Bayes_finn(net, t, u, n_runs, quantile = 0.05):
     std = np.std(y_preds, axis=0)
     lower = np.quantile(y_preds, quantile, axis=0)
     upper = np.quantile(y_preds, 1-quantile, axis=0)
+    print(std)
+    print(np.sum(std))
     return mean, median, std, lower, upper
 
 

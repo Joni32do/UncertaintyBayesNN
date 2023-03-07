@@ -6,7 +6,7 @@ from bnnLayer import LinearBayes
 
 
 class BayesianNet(nn.Module):
-    def __init__(self, arc=[1,10,1], bayes_arc = [1], rho = -4):
+    def __init__(self, arc=[1,10,1], bayes_arc = [1], rho = -4, rho_w = None, rho_b = None):
         super(BayesianNet, self).__init__()
         '''
         Generates a fully Bayesian network  
@@ -36,17 +36,24 @@ class BayesianNet(nn.Module):
         #Initialize
         self.arc=arc
         self.layers_n = len(arc)
-        self.activation_fn = torch.nn.LeakyReLU()
+        self.activation_fn = torch.nn.Tanh()
         
         #For scalar extent to array
         if len(bayes_arc) == 1:
             bayes_arc = np.ones(len(arc)) * bayes_arc[0]
 
+        #Ugly
+        if rho_w is None:
+            rho_w = rho
+        if rho_b is None:
+            rho_b = rho
+
+
         #creates a list with Linear Bayes layers of specified architectur
         layers = []
         for i in range(self.layers_n-1):
             layers.append(LinearBayes(arc[i],arc[i+1],
-                            rho_w_prior = rho, rho_b_prior = rho, 
+                            rho_w_prior = rho_w, rho_b_prior = rho_b, 
                             bayes_factor = bayes_arc[i+1], pretrain=True))
                 
         self.layers = nn.ModuleList(layers)
