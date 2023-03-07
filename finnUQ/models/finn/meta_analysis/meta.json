@@ -1,10 +1,10 @@
 {
     "data":{
-        "n_train":101,
-        "n_bars":15,
+        "n_train":100,
+        "n_bars":12,
         "n_samples":100,
         "n_plot":200,
-        "noise":0.01,
+        "noise":0.005,
         "is_log":true,
         "lin":{
             "min":0.1,
@@ -23,12 +23,12 @@
         }
     },
     "training":{
-        "rho":0.000000001,
-        "epochs":4900,
-        "pretrain_epochs":4900,
-        "learning_rate":0.001,
+        "rho":0,
+        "epochs":20000,
+        "pretrain_epochs":10000,
+        "learning_rate":0.008,
         "sort":true,
-        "logging":false
+        "logging":true
     },
     "build":{
         "n_params":100,
@@ -37,7 +37,7 @@
                          [1, 4, 9, 4, 1],
                          [1, 8, 4, 8, 1]
                          ],
-        "bayes_arcs":[[0]],
+        "bayes_arcs":[[[0,1]],[[0,0.5]],[0.1],[[0.5,0]]],
         "all_combinations_possible":true,
         "tries": 3
     }

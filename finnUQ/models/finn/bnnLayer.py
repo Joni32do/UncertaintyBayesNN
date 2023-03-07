@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -28,33 +29,22 @@ class LinearBayes(nn.Module):
 
     """
     def __init__(self, n_in, n_out, mu_w_prior=0,rho_w_prior=-1, mu_b_prior=0, rho_b_prior=-1, 
-                 bayes_factor = 1, pretrain = False):
+                 bayes_factor_w = 1, bayes_factor_b = 1, pretrain = False):
         
         super(LinearBayes, self).__init__()
         
-        ###Sparse Bayesian
-        #Proportional to Bayes (special case: 1 Neuron ->  1/n_out [1 is understood as fully bayesian])
-        if bayes_factor <= 1:
-            bayes_factor = int(bayes_factor * n_out)
-        #Neurons
-        self.is_bayes = torch.zeros(n_out,1)
-        # self.is_bayes_w = 
-        # self.is_bayes_b = 
-        if bayes_factor != 0:
-             self.is_bayes[:int(bayes_factor)] = 1
-
-
         #Mode
         self.pretrain = pretrain
         
-        #Additional support for scalar initialization
-        #   Better: reset parameters ...
+        #Initialization from scalar
+        #   Kaiman init for weights
+        init_scale = 1/torch.sqrt(torch.tensor(n_in))
         if not torch.is_tensor(mu_w_prior):
-            mu_w_prior = mu_w_prior + torch.rand(n_out, n_in) - 0.5
+            mu_w_prior = mu_w_prior + init_scale *(torch.rand(n_out, n_in) - 0.5)
         if not torch.is_tensor(rho_w_prior):
             rho_w_prior = rho_w_prior*torch.ones(n_out,n_in)
         if  not torch.is_tensor(mu_b_prior):
-            mu_b_prior = mu_b_prior + torch.rand(n_out) - 0.5
+            mu_b_prior = mu_b_prior +  init_scale *(torch.rand(n_out) - 0.5)
         if not torch.is_tensor(rho_b_prior):
             rho_b_prior = rho_b_prior*torch.ones(n_out)
 
@@ -83,6 +73,24 @@ class LinearBayes(nn.Module):
         #Noise
         self.noise_w = Normal(torch.zeros_like(self.mu_w), torch.ones_like(self.mu_w))
         self.noise_b = Normal(torch.zeros_like(self.mu_b), torch.ones_like(self.mu_b))
+
+        
+        #No noise    -->  sparse Bayes
+        
+        #Conversion
+        #Proportional to Neuron (special case: 1 Neuron ->  1/n_out [1 is understood as fully bayesian])
+        if bayes_factor_w <= 1:
+            bayes_factor_w = math.ceil(bayes_factor_w * n_out)
+        if bayes_factor_b <= 1:
+            bayes_factor_b = math.ceil(bayes_factor_b * n_out)
+        
+        #Assign logical arrays
+        self.is_bayes_w = torch.zeros(n_out,1)
+        self.is_bayes_b = torch.zeros(n_out)
+        if bayes_factor_w != 0:
+            self.is_bayes_w[:bayes_factor_w] = 1
+        if bayes_factor_b != 0:
+            self.is_bayes_b[:bayes_factor_b] = 1
          
 
     def sample(self, stochastic = True):
@@ -90,10 +98,10 @@ class LinearBayes(nn.Module):
         Samples from the neurons where is_bayes
         '''
         self.weights = self.mu_w  + (torch.log(1 + torch.exp(self.rho_w)) * self.noise_w.sample() 
-                                     * self.is_bayes if stochastic else 0)
+                                     * self.is_bayes_w if stochastic else 0)
         
         self.bias = self.mu_b + (torch.log( 1 + torch.exp(self.rho_b)) * self.noise_b.sample() 
-                                 * self.is_bayes.squeeze() if stochastic else 0)
+                                 * self.is_bayes_b if stochastic else 0)
 
 
     def sort_bias(self,previous_weight):
@@ -118,19 +126,17 @@ class LinearBayes(nn.Module):
         self.mu_w.data = self.mu_w.data[sorted_indices, :]
         self.rho_w.data = self.rho_w.data[sorted_indices, :]
         #Sort is_bayes
-        self.is_bayes = self.is_bayes[sorted_indices]
+        self.is_bayes_w = self.is_bayes_w[sorted_indices]
+        self.is_bayes_b = self.is_bayes_b[sorted_indices]
         
         return sorted_indices
   
     def kl_loss(self):
         '''
         Evaluates the Kullback-Leibler divergence loss
+        I think I only should penalize if sigma is too low
 
-        TODO:
-        !But does it?
-
-        I think I only should penalize if sigma is to low
-
+        TODO: Proper Evidence Lower Bound (ELBO)
         '''
         
         sigma_w = torch.log(1 + torch.exp(self.rho_w))
@@ -149,10 +155,6 @@ class LinearBayes(nn.Module):
         #          -- Dieser Teil is für Standardabweichung ---- Dieser Teil für Mittelwerte ----- 
         
         #Wenn Neuronen ausgeschalten sind, ist ihr prior ihr rho und damit ist der erste Teil 0 -> passt!
-        
-        
-        
-
 
         return loss
     

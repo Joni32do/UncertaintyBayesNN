@@ -24,7 +24,6 @@ class BayesianNet(nn.Module):
                     - bayes_factor: Can be used to adjust how much percent of each layer is bayesian
                     o   Either takes value between 0 < bayes_factor < 1
                     o   Or integer numbers from 0 to n_out which indicate how many neurons have zero_variance
-                    o   If it has value -1 nn.Linear is used
                     Admittingly a bit overused
 
             - rho: Initial variation of params
@@ -35,13 +34,20 @@ class BayesianNet(nn.Module):
         '''
         #Initialize
         self.arc=arc
+        self.bayes_arc = bayes_arc.copy()
         self.layers_n = len(arc)
         self.activation_fn = torch.nn.Tanh()
         
         #For scalar extent to array
-        if len(bayes_arc) == 1:
-            bayes_arc = np.ones(len(arc)) * bayes_arc[0]
-
+        if len(self.bayes_arc) == 1:
+            for i in range(len(arc)-1):
+                self.bayes_arc.append(self.bayes_arc[0])
+        
+        #If only one entry is given extend it for both weight and bias -> Bayes Neuron
+        if type(self.bayes_arc[0]) is not list:
+            for i in range(len(self.bayes_arc)):
+                self.bayes_arc[i] = [self.bayes_arc[i], self.bayes_arc[i]]
+        
         #Ugly
         if rho_w is None:
             rho_w = rho
@@ -54,12 +60,11 @@ class BayesianNet(nn.Module):
         for i in range(self.layers_n-1):
             layers.append(LinearBayes(arc[i],arc[i+1],
                             rho_w_prior = rho_w, rho_b_prior = rho_b, 
-                            bayes_factor = bayes_arc[i+1], pretrain=True))
+                            bayes_factor_w = self.bayes_arc[i+1][0],
+                            bayes_factor_b = self.bayes_arc[i+1][1], pretrain=True))
                 
         self.layers = nn.ModuleList(layers)
         
-        #Always starts in pretrain mode
-        self.set_pretrain(True)
 
 
     def sort_bias(self):
@@ -68,10 +73,17 @@ class BayesianNet(nn.Module):
             previous_sort = layer.sort_bias(previous_sort)
 
     def set_pretrain(self, pretrain):
+        '''
+        Sets a layer to pretrain
+            TODO: More advanced implementation
+        '''
         for layer in self.layers:
             layer.pretrain = pretrain
 
     def kl_loss(self):
+        '''
+        Calculates the kl-loss for all layers
+        '''
         loss = 0
         for layer in self.layers:
             loss += layer.kl_loss()

@@ -109,8 +109,8 @@ def generate_data(dic):
     y_train[x_train!=0] = 1/(1 + a * x_train[x_train!=0]**(beta-1))
 
     #For evaluating
-    y_eval = torch.zeros((bars,1))
-    y_eval[x_eval!=0] = 1/(1 + a * x_eval[x_eval!=0]**(beta-1))
+    y_eval_mean = torch.zeros((bars,1))
+    y_eval_mean[x_eval!=0] = 1/(1 + a * x_eval[x_eval!=0]**(beta-1))
 
     #For plotting
     y_plot = torch.zeros((n_plot,1))
@@ -118,7 +118,7 @@ def generate_data(dic):
 
     
     ### Noise
-    noise_fn = lambda x: x * dic["noise"]
+    noise_fn = lambda x: dic["noise"] #x * dic["noise"]
 
     #Train
     noise_train = torch.randn((n,1)) * noise_fn(x_train)
@@ -126,13 +126,14 @@ def generate_data(dic):
     
     #Eval
     noise_eval = torch.randn((bars,samples)) * noise_fn(x_eval)
-    y_eval = y_eval + noise_eval  #Automatch to shape (bars,samples)
+    y_eval = y_eval_mean + noise_eval  #Automatch to shape (bars,samples)
 
     #Saving to dictionary
     dic["x_train"] = x_train
     dic["y_train"] = y_train
 
     dic["x_eval"] = x_eval
+    dic["y_eval_mean"] = y_eval_mean
     dic["y_eval"] = y_eval
 
     dic["x_true"] = x_plot
@@ -141,7 +142,8 @@ def generate_data(dic):
     return dic  
 
 
-def train_net(net, x_train, y_train, hyper):
+
+def train_net(net, x_train, y_train, hyper, path):
     '''
     Trains a Bayesian network (def line 16)
         - lr = 0.001
@@ -161,7 +163,7 @@ def train_net(net, x_train, y_train, hyper):
     # Define the loss function and optimizer
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(net.parameters(), lr)
-    
+    errors = []
     
     def closure():
         optimizer.zero_grad()
@@ -173,11 +175,11 @@ def train_net(net, x_train, y_train, hyper):
         mse_loss = criterion(output, y_train)
         
         # Compute the KL divergence loss for the Bayesian self.layers TODO:
-        kl_weight = 0.0
+        kl_weight = 0
         kl_divergence_loss = net.kl_loss() * kl_weight
 
         # Backward pass
-        loss = mse_loss + kl_divergence_loss
+        loss = mse_loss
         loss.backward()
         # (loss + kl_divergence_loss).backward()
         return mse_loss.item()
@@ -195,7 +197,7 @@ def train_net(net, x_train, y_train, hyper):
 
 
         mse = optimizer.step(closure)
-        
+        errors.append(mse)
         if sort:
             net.sort_bias()
 
@@ -207,8 +209,12 @@ def train_net(net, x_train, y_train, hyper):
             #     print(m.mu_b.data)
             #     print(m.rho_w.data)
 
+    if logging:
+        plt.plot(errors)
+        plt.yscale('log')
+        plt.savefig(path + "train.pdf")
+        # plt.close()
 
-    return mse
 
 
 def eval_Bayes_net(net, x_eval, samples, quantile = 0.025):
@@ -226,7 +232,6 @@ def eval_Bayes_net(net, x_eval, samples, quantile = 0.025):
     lower = np.quantile(y_preds, quantile, axis=1)
     upper = np.quantile(y_preds, 1-quantile, axis=1)
     return y_preds,mean,lower,upper
-
 
 def calc_water(y_preds, y_eval):
     '''
@@ -265,7 +270,7 @@ def create_fig(data, y_preds, mean ,lower, upper, path = None):
     x = data["x_true"].squeeze()
     y = data["y_true"].squeeze()
       # 2 * sigma=95% -> more noise per x (see data_generation())
-    q = 2 * x * data["noise"]
+    q = 2 * data["noise"]
 
     plt.plot(x,y, label='Noiseless function')
     
@@ -313,7 +318,9 @@ def create_fig(data, y_preds, mean ,lower, upper, path = None):
     plt.close()
 
 
-def experiment(arc, bayes_arc, t, data, hyper, path):
+
+
+def experiment(arc, bayes_arc, t, data, hyper, arc_path):
     '''
         - Parameter
             o arc - Architecture
@@ -328,28 +335,27 @@ def experiment(arc, bayes_arc, t, data, hyper, path):
     
     '''
     #Location and name of file
-    path_figure = os.path.join(path, str(t))
+    path = os.path.join(arc_path, str(t))
 
     #Network    
     net = BayesianNet(arc, bayes_arc, hyper["rho"])
             
 
     #Training
-    mse = train_net(net, data["x_train"], data["y_train"], hyper)
-    #TODO: Sample with MCMC 
-        #...
-    #Save state dict - #TODO: overwrites
-    torch.save(net.state_dict(), os.path.join(path,"model.pth"))
+    train_net(net, data["x_train"], data["y_train"], hyper, path)
+
+    #Save state dict
+    torch.save(net.state_dict(), path + "model.pth")
 
 
     #Evaluation
     y_preds,mean,lower,upper = eval_Bayes_net(net, data["x_eval"], data["n_samples"])
-    
+    loss_fn = nn.MSELoss() 
+    mse = loss_fn(torch.tensor(mean),data["y_eval_mean"].squeeze())
     water = calc_water(y_preds, data["y_eval"])
 
-
     #Plotting
-    create_fig(data, y_preds, mean, lower, upper, path_figure)
+    create_fig(data, y_preds, mean, lower, upper, path)
 
     return mse, water
 
@@ -491,9 +497,9 @@ if __name__ == '__main__':
                     wasserstein[i,j,t] = w
                     training_time[i,j,t] = time.time() - start
                 
-                
+                #TODO: Logging
+                plt.close()
                 print(f"\n    Architecture took: {(np.sum(training_time[i,j,:])):.3f} seconds")
-                #(f"{((time.time()-start)/tries):.3f}")
 
 
     #Not all possible combinations

@@ -13,6 +13,7 @@ __pycache__/
 *.npy
 *.egg-info
 *.png
+*.pth
 *.sw?
 /bin
 /models/*/out/*
