@@ -40,7 +40,7 @@ class BayesianNet(nn.Module):
         
         #For scalar extent to array
         if len(self.bayes_arc) == 1:
-            for i in range(len(arc)-1):
+            for i in range(len(arc)-2):
                 self.bayes_arc.append(self.bayes_arc[0])
         
         #If only one entry is given extend it for both weight and bias -> Bayes Neuron
@@ -60,8 +60,8 @@ class BayesianNet(nn.Module):
         for i in range(self.layers_n-1):
             layers.append(LinearBayes(arc[i],arc[i+1],
                             rho_w_prior = rho_w, rho_b_prior = rho_b, 
-                            bayes_factor_w = self.bayes_arc[i+1][0],
-                            bayes_factor_b = self.bayes_arc[i+1][1], pretrain=True))
+                            bayes_factor_w = self.bayes_arc[i][0],
+                            bayes_factor_b = self.bayes_arc[i][1], pretrain=True))
                 
         self.layers = nn.ModuleList(layers)
         

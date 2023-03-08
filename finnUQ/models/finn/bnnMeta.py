@@ -41,7 +41,7 @@ x_train[::samples] reverses np.repeat
 np.random.seed(42)
 
 
-def generate_data(dic):
+def generate_data(data):
     '''
     generatedata similar to retardation factor to 
     adds
@@ -67,23 +67,24 @@ def generate_data(dic):
     
     ### Get number of samples
     #For training
-    n = dic["n_train"]
+    n = data["n_train"]
 
     #For evaluating
-    bars = dic["n_bars"]
-    samples = dic["n_samples"]
+    bars = data["n_bars"]
+    samples = data["n_samples"]
 
     #For plotting
-    n_plot = dic["n_plot"]
+    n_plot = data["n_plot"]
     
+
 
     ###Distribute and calculate
     # lin or log
-    if dic["is_log"]:
-        val = dic["log"]
+    if data["is_log"]:
+        val = data["log"]
         fn = torch.logspace
     else:
-        val = dic["lin"]
+        val = data["lin"]
         fn = torch.linspace
     
     #Calculate x
@@ -91,9 +92,21 @@ def generate_data(dic):
     x_eval = fn(val["min"], val["max"],bars).reshape((bars,1))
     x_plot = fn(val["min"], val["max"],n_plot).reshape((n_plot,1))
 
+
+
+    #Noise function
+    if data["noise_fn"] == "+":
+        noise_fn = lambda x: data["noise"]
+    elif data["noise_fn"] == "x":
+        noise_fn = lambda x: x * data["noise"]
+    elif data["noise_fn"] == "beta":
+        noise_fn = lambda x: 0 #not implemented
+    else:
+        raise NotImplementedError("Choose noise_fn to be + or x")
+
     
     #Parameters 
-    params = dic["params"]
+    params = data["params"]
 
     k_d = params["k_d"]
     beta = params["beta"]
@@ -118,8 +131,7 @@ def generate_data(dic):
 
     
     ### Noise
-    noise_fn = lambda x: dic["noise"] #x * dic["noise"]
-
+    
     #Train
     noise_train = torch.randn((n,1)) * noise_fn(x_train)
     y_train = y_train + noise_train
@@ -129,17 +141,17 @@ def generate_data(dic):
     y_eval = y_eval_mean + noise_eval  #Automatch to shape (bars,samples)
 
     #Saving to dictionary
-    dic["x_train"] = x_train
-    dic["y_train"] = y_train
+    data["x_train"] = x_train
+    data["y_train"] = y_train
 
-    dic["x_eval"] = x_eval
-    dic["y_eval_mean"] = y_eval_mean
-    dic["y_eval"] = y_eval
+    data["x_eval"] = x_eval
+    data["y_eval_mean"] = y_eval_mean
+    data["y_eval"] = y_eval
 
-    dic["x_true"] = x_plot
-    dic["y_true"] = y_plot
+    data["x_true"] = x_plot
+    data["y_true"] = y_plot
     
-    return dic  
+    return data  
 
 
 

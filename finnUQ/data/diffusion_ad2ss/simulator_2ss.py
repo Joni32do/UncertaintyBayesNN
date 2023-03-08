@@ -214,8 +214,12 @@ class Simulator(object):
             f_hyd = -self.a_k * \
                 (1-self.f)*(self.k_d*cw**(self.beta-1))*(self.rho_s/self.n_e)
             g_hyd = self.a_k * self.rho_s/self.n_e * sk
+            
+            ################################################################
+            #TODO:   THIS IS IMPORTANT
             ret = (self.f*self.sorpt_derivat(cw)*(self.rho_s/self.n_e))+1
-
+            ################################################################
+            
             cw_new = (self.disp*np.matmul(self.lap, cw) + dif_bound)/ret
             -self.v/ret*np.matmul(self.fd, cw) + (f_hyd*cw+g_hyd)/ret
 

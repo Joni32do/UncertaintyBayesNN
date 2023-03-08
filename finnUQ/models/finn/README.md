@@ -52,3 +52,11 @@ Meta training on the architectures
                 [1, 4, 8, 4, 1]],
         
 * 80
+* 81
+* 82 First test with arbitrary BNN
+* 83 Test with trained BNN (but not noise data
+  
+
+* 90 Noisy Data
+
+* 95 Noisy Data long 
