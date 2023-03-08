@@ -16,8 +16,9 @@ import numpy as np
 from scipy.stats import wasserstein_distance
 
 #Plotting
+import matplotlib
 import matplotlib.pyplot as plt
-
+matplotlib.use('Agg')
 #Data
 import pandas as pd
 
@@ -368,7 +369,7 @@ def experiment(arc, bayes_arc, t, data, hyper, arc_path):
 
 
 if __name__ == '__main__':
-    root = os.path.join(os.path.realpath(__file__), "..", "meta_analysis")
+    root = os.path.join(os.path.dirname(os.path.realpath(__file__)), "meta_analysis")
     print("This is the root ", root)
 
     #Load parameters from json
