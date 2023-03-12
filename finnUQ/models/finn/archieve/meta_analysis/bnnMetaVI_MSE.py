@@ -163,54 +163,43 @@ def train_net(net, x_train, y_train, hyper, path):
     '''
     #Logging
     logging = hyper["logging"]
+
     #Hyperparameters
     
     epochs = hyper["epochs"]
     pretrain_epochs = hyper["pretrain_epochs"]
     lr = hyper["learning_rate"]
     sort = hyper["sort"]
-    elbo = hyper["elbo"]
+
 
 
     # Define the loss function and optimizer
+    criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(net.parameters(), lr)
-    losses = []
-
-    #Loss functions
-    def elbo_loss(net, x_train, y_train):
-        return net.sample_elbo(x_train, y_train, 
-                               samples = elbo["samples"], 
-                               noise = elbo["noise"], 
-                               kl_weight = elbo["kl_weight"])
-
-    def mse_loss(net, x_train, y_train):
-        pred = net.forward(x_train)
-        return nn.MSELoss()(y_train,pred)
+    errors = []
     
-    if hyper["loss_fn"] == "elbo":
-        loss_fn = elbo_loss
-    elif hyper["loss_fn"] == "mse":
-        loss_fn = mse_loss
-    else:
-        raise NotImplementedError("Only elbo or mse is implemented")
-    
-
     def closure():
         optimizer.zero_grad()
 
+        # Forward pass
+        output = net(x_train)
+        
         # Compute the loss
-        loss = loss_fn(net, x_train, y_train)
-            
+        mse_loss = criterion(output, y_train)
+        
+        # Compute the KL divergence loss for the Bayesian self.layers TODO:
+        kl_weight = 0
+        kl_divergence_loss = net.kl_loss() * kl_weight
+
         # Backward pass
+        loss = mse_loss
         loss.backward()
-
-        return loss.item()
-
-
+        # (loss + kl_divergence_loss).backward()
+        return mse_loss.item()
 
 
-    if logging: 
-        print(f"\n \t Begin training")
+
+
 
     # Train the net for 1000 epochs
     for epoch in range(epochs):
@@ -220,23 +209,23 @@ def train_net(net, x_train, y_train, hyper, path):
             net.set_pretrain(False)
 
 
-        loss = optimizer.step(closure)
-        losses.append(loss)
+        mse = optimizer.step(closure)
+        errors.append(mse)
         if sort:
             net.sort_bias()
 
         # Print the loss every 100 epochs
         if logging and (epoch + 1) % 100 == 0:
-            print(f"\t \t Epoch {str(epoch + 1).rjust(len(str(epochs)),'0')}/{epochs}: Loss = {loss:.4f}")
+            print(f"\t \t Epoch {str(epoch + 1).rjust(len(str(epochs)),'0')}/{epochs}: Loss = {mse:.4f}")
 
             # for m in net.layers:
             #     print(m.mu_b.data)
             #     print(m.rho_w.data)
 
     if logging:
-        plt.plot(losses)
+        plt.plot(errors)
         plt.yscale('log')
-        plt.savefig(os.path.join(path,"train.pdf"))
+        plt.savefig(path + "train.pdf")
         # plt.close()
 
 
@@ -372,7 +361,7 @@ def experiment(arc, bayes_arc, t, data, hyper, arc_path):
             
 
     #Training
-    train_net(net, data["x_train"], data["y_train"], hyper, arc_path)
+    train_net(net, data["x_train"], data["y_train"], hyper, path)
 
     #Save state dict
     torch.save(net.state_dict(), path + "model.pth")

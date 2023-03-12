@@ -42,7 +42,7 @@ def __add_fig(fig, ax, row:float, column:float, title:str, value:np.ndarray,
     """
     font_size = FONT_SIZE
     if is_c:
-        cmap = 'coolwarm'
+        cmap = 'viridis'
     else:
         cmap = 'Greens'
     h = ax[row, column].imshow(value, cmap = cmap, interpolation='nearest', 

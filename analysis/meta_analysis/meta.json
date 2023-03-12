@@ -24,13 +24,13 @@
         }
     },
     "training":{
-        "rho":-3.1,
+        "rho":-2.9,
         "epochs":2000,
         "pretrain_epochs":1000,
         "learning_rate":0.005,
         "sort":true,
         "logging":true,
-        "loss_fn":"mse",
+        "loss_fn":"elbo",
         "elbo":{
             "noise":0.0001,
             "samples":5,
