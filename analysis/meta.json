@@ -1,12 +1,12 @@
 {
     "data":{
-        "n_train":312,
-        "n_bars":12,
+        "n_train":81,
+        "n_bars":6,
         "n_samples":100,
-        "n_plot":200,
-        "noise":0.0001,
-        "noise_fn":"+",
-        "is_log":true,
+        "n_plot":100,
+        "noise":0.02,
+        "noise_fn":"*",
+        "is_log":false,
         "lin":{
             "min":0.1,
             "max":1
@@ -24,17 +24,17 @@
         }
     },
     "training":{
-        "rho":-2.9,
-        "epochs":2000,
-        "pretrain_epochs":1000,
+        "rho":-2,
+        "epochs":8000,
+        "pretrain_epochs":5000,
         "learning_rate":0.005,
         "sort":true,
         "logging":true,
         "loss_fn":"elbo",
         "elbo":{
-            "noise":0.0001,
-            "samples":5,
-            "kl_weight":0.001
+            "noise":0.02,
+            "samples":3,
+            "kl_weight":0
         }
     },
     "build":{
@@ -43,8 +43,8 @@
                         [1, 8, 8, 1],
                         [1, 9, 4, 9, 1],
                         [1, 4, 8, 4, 1]],
-        "bayes_arcs":[[0], [[-1,-1]],[[-0.5,-1]],[[0,-1]]],
+        "bayes_arcs":[[0], [0.1], [0.5], [1],[[0,1]],[[0,-1]]],
         "all_combinations_possible":true,
-        "tries": 5
+        "tries": 1
     }
 }

@@ -7,7 +7,13 @@ Contains all the code of my bachelor thesis **Uncertainty quantification using b
 
 It is expected that you have a basic knowledge of neural networks. Otherwise they are shortly explained in the accompianing thesis.
 
-This bachelor thesis uses stochastic neural networks called BNN(Bayesian neural network). The key difference is that the parameters (weights and biases) have a probability distribution and not just single fixed value.
+This bachelor thesis uses stochastic neural networks called BNN(Bayesian neural network). The key difference is that the parameters (weights and biases) have a probability distribution and not just single fixed value. This is motivated by Bayes law, hence the name
+
+$$
+    p(\theta|D) = \frac{p(D|\theta)p(\theta)}{p(D)}
+$$
+Where $p(\theta|D)$ is the Posterior, $p(D|\theta)$ is the Likelihood, $p(\theta)$ the prior and $p(D)$ the Evidence.
+
 
 Two methods:
 
@@ -18,7 +24,7 @@ Two methods:
 
 - Sampling -- with Monte Carlo Markov Chains (MCMC):
      * Evaluates with random weights in a chain
-     * Accepts to the chain if proposal according to current step is "better"
+     * Accepts or rejects a proposal to the chain
      * Curse of dimensions make this scale very bad
      * Methods for sampling are:
          * Metropolis Hastings
@@ -27,24 +33,35 @@ Two methods:
 
 
 
-## Meta analysis for best BNN for Retardation Function
+## Analysis for best BNN for Retardation Function
 
 * Trains stochasticly with MSE
 * Uses the Wasserstein distance to compare actual distribution and distribution of bnn
 * Trained architectures:
-    *  [[1, 32, 1],
-      [1, 8, 8, 1],
-      [1, 4, 9, 4, 1],
-      [1, 8, 4, 8, 1]]
+    *  $$
+        [[1, 32, 1],
+        [1, 8, 8, 1],
+        [1, 4, 9, 4, 1],
+        [1, 8, 4, 8, 1]]
+       $$
     * Horizontal bayes
-      * [[0], [0.25], [0.5], [0.75], [1]]
+      * $$[[0], [0.5], [0.1], [1]]
+      $$
     * Vertical bayes
-      * [[0, 0, 1],
-      [0, 0, 1, 0],
-      [0, 0, 0, 1, 0],
-      [0, 0, 1, 0, 0]]
-      * Special case: Last Layer only
+      * $$[[0, 0, 1],
+          [0, 0, 1, 0],
+          [0, 0, 0, 1, 0],
+          [0, 0, 1, 0, 0]]
+          $$
+    * Special case: Last Layer only
+        * $$[[0,-1]]$$
     * Sparse with high uncertainty (rho)
+
+
+Improvements:
+
+
+
 
 ## FINN
 

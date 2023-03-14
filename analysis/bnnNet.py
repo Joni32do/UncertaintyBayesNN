@@ -153,7 +153,7 @@ class BayesianNet(nn.Module):
         log_prior = log_priors.mean()
         log_like = log_likes.mean()
 
-        elbo_loss = kl_weight * (log_post + log_prior) - log_like
+        elbo_loss = kl_weight * (log_post - log_prior) - log_like
         return elbo_loss
 
 
