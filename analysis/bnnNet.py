@@ -31,6 +31,19 @@ class BayesianNet(nn.Module):
 
         Always starts training in pretrain and must be turned off for Bayes learning
         
+        Example:
+
+            Network with Architecture:
+                [  2  ,                5           ,       1  ]
+                [Input,  Neurons in Hidden Layer(s),    Output]
+            
+            Bayes Architecture:
+                [     ,  [      4     ,      5     ],   [0, 1]]
+                [     ,  [Neurons with Bayes Weight, Neurons with Bayes Weight],...]
+
+
+        There are plenty of Shortcuts Explained in the method 
+                >> assemble_bayes_arc <<
         '''
         #Initialize
         self.layers_n = len(arc)
@@ -44,7 +57,7 @@ class BayesianNet(nn.Module):
 
         #Architectue
         self.arc=arc
-        self.bayes_arc = self.assemble_bayes_arc(bayes_arc.copy())
+        self.bayes_arc = self.decode_shortcuts(bayes_arc.copy())
 
         
 
@@ -62,66 +75,7 @@ class BayesianNet(nn.Module):
         self.layers = nn.ModuleList(layers)
         
 
-    #Functions for Init
-    def assemble_bayes_arc(self, bayes_arc):
-        '''
-        Bayes layer needs to be of the form
-        [ [0, 1], [1, 1], [0, 0] ]
-            (if Architecture is of length 4 e.g. [1, 8, 8, 1])
-        
-        Method ensures this form -> Decodes Shortcuts
-        [ [1], [1], [0.5] ] -> [ [1, 1], [1, 1], [0.5, 0.5]]
 
-        [ [-1] ]            -> [ [0, 0], [0, 0], [-1, -1] ]
-
-        [ [0.5] ]           -> [ [0.5,0.5], [0.5,0.5], [0.5,0.5] ]
-
-        [ [0, -1] ]         -> [ [0, 0], [0, 0], [-1, -1] ]
-        '''
-        
-        #For scalar extent to array
-        if len(bayes_arc) == 1:
-            
-            #Checks if last layer special (and removes instruction which is the first entry)
-            middle, last  = self.get_last_layer(bayes_arc)
-                   
-            for i in range(self.layers_n - 2):
-                bayes_arc.append(middle)
-
-            bayes_arc.append(last)
-        
-        #If only one entry is given extend it for both weight and bias
-        if type(bayes_arc[0]) is not list:
-            for i in range(len(bayes_arc)):
-                bayes_arc[i] = [bayes_arc[i], bayes_arc[i]]
-        
-        return bayes_arc
-        
-
-    def get_last_layer(self, bayes_arc):
-        '''
-        If first entry is negative all the intermediate layers wont be Bayes
-
-        Returns intermediate layer and last layer (the same if not neg) 
-        
-        Ensures: bayes_arc is empty
-        '''
-        if type(bayes_arc[0]) is not list:
-            if bayes_arc[0] < 0:
-                middle = 0
-                last = - bayes_arc.pop(0)
-            else:
-                middle = bayes_arc.pop(0)
-                last = middle
-        else:
-            if bayes_arc[0][0] < 0 or bayes_arc[0][1] < 0:
-               middle = [0,0]
-               last = bayes_arc.pop(0)
-               last = [- last[0], - last[1]]
-            else:
-                middle = bayes_arc.pop(0)
-                last = middle
-        return middle, last
 
     #Training routines
     def sort_bias(self):
@@ -137,13 +91,14 @@ class BayesianNet(nn.Module):
             layer.activate_pretrain(pretrain)
 
     #ELBO loss
-    def sample_elbo(self, x, y, samples = 5, noise = 0.1, kl_weight = 0.01):
+    def sample_elbo(self, x, y, samples, noise, kl_weight):
 
         n = y.size()[0]
         log_likes = torch.empty((samples,n,1))
         log_priors = torch.empty((samples,))
         log_posts = torch.empty((samples,))
         noise = torch.ones_like(y) * noise
+        
         for i in range(samples):
             pred = self.forward(x)
             log_likes[i] = torch.distributions.Normal(y, noise).log_prob(pred)
@@ -189,3 +144,75 @@ class BayesianNet(nn.Module):
                 x = layer(x)
 
         return x
+    
+
+    '''
+    Functions for Initialization
+    
+    Explains all available Shortcuts for Bayesian Architecture
+    
+    
+    '''
+
+        #Functions for Init
+    def decode_shortcuts(self, bayes_arc):
+        '''
+        Bayes layer needs to be of the form
+        [ [0, 1], [1, 1], [0, 0] ]
+            (if Architecture is of length 4 e.g. [1, 8, 8, 1])
+        
+        Method ensures this form -> Decodes Shortcuts
+        [ [1], [1], [0.5] ] -> [ [1, 1], [1, 1], [0.5, 0.5]]
+
+        [ [-1] ]            -> [ [0, 0], [0, 0], [-1, -1] ]
+
+        [ [0.5] ]           -> [ [0.5,0.5], [0.5,0.5], [0.5,0.5] ]
+
+        [ [0, -1] ]         -> [ [0, 0], [0, 0], [-1, -1] ]
+        '''
+        
+        #For scalar extent to array
+        if len(bayes_arc) == 1:
+            
+            #Checks if last layer special (and removes instruction which is the first entry)
+            middle, last  = self.get_last_layer(bayes_arc)
+                   
+            for i in range(self.layers_n - 2):
+                bayes_arc.append(middle)
+
+            bayes_arc.append(last)
+        
+        #If only one entry is given extend it for both weight and bias
+        if type(bayes_arc[0]) is not list:
+            for i in range(len(bayes_arc)):
+                bayes_arc[i] = [bayes_arc[i], bayes_arc[i]]
+        
+        return bayes_arc
+        
+
+    def get_last_layer(self, bayes_arc):
+        '''
+        Shortcut for only last layer:
+
+            Returns: 
+                intermediate layer and last layer (the same if not neg) 
+            
+            Ensures: 
+                bayes_arc is empty
+        '''
+        if type(bayes_arc[0]) is not list:
+            if bayes_arc[0] < 0:
+                middle = 0
+                last = - bayes_arc.pop(0)
+            else:
+                middle = bayes_arc.pop(0)
+                last = middle
+        else:
+            if bayes_arc[0][0] < 0 or bayes_arc[0][1] < 0:
+               middle = [0,0]
+               last = bayes_arc.pop(0)
+               last = [- last[0], - last[1]]
+            else:
+                middle = bayes_arc.pop(0)
+                last = middle
+        return middle, last

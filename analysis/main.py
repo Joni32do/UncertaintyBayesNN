@@ -4,6 +4,7 @@ import sys
 import time
 import copy
 from pathlib import Path
+import argparse
 
 #Machine Learning
 import torch
@@ -29,7 +30,7 @@ import json
 #Import custom function
 from bnnNet import BayesianNet
 from data import generate_data
-from visualize import create_fig
+from visualize import plot_bayes
 from train import train_net
 from evaluate import eval_Bayes_net, calc_water
 '''
@@ -60,11 +61,11 @@ def experiment(arc, bayes_arc, trie, data, hyper, arc_path):
     net = BayesianNet(arc, bayes_arc, hyper["rho"])
             
 
-    #Training
-    final_loss = train_net(net, data["x_train"], data["y_train"], hyper, arc_path)
+    #Train
+    final_loss = train_net(net, data, hyper, arc_path)
 
     #Save state dict
-    torch.save(net.state_dict(), path + "model.pth")
+    torch.save(net.state_dict(), arc_path + "model.pth")
 
 
     #Evaluation
@@ -72,44 +73,31 @@ def experiment(arc, bayes_arc, trie, data, hyper, arc_path):
     wasserstein = calc_water(y_preds, data["y_eval"])
 
     #Plotting
-    create_fig(data, y_preds, mean, lower, upper, path)
+    plot_bayes(data, y_preds, mean, lower, upper, path)
 
     return final_loss, wasserstein
 
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-n","--name", help="name of the folder where Analysis according to meta.json")
+    args = parser.parse_args()
+    #File managment >>>> ENTER  N A M E  <<<<
+    description = args.name
+    description = "Maroon 5"
+
     root =os.path.dirname(os.path.realpath(__file__))
-    print("This is the root ", root)
+    main_path = os.path.join(root,"meta_analysis", description)
+    Path(main_path).mkdir(parents=True, exist_ok=True)
 
     #Load parameters from json
     with open(os.path.join(root,"meta.json"), 'r') as param:
         meta = json.load(param)
     
     
-    #File managment
-    description = "X" + str(meta["data"]["n_train"]) + \
-                  "_N" + str(meta["data"]["noise"])+ \
-                  "_E" + str(meta["training"]["epochs"]) + \
-                  "_Rho" + str(meta["training"]["rho"])
-    if meta["data"]["is_log"]:
-        description += "Log"
-
-    '''
-    Other influences:
-        - Training
-            o Learning rate
-            o Additional KL - Loss
-        - bnnLayer
-            o Initial Values
-                * mu
-                * rho_w, rho_b
-
-    '''   
-    #
-    main_path = os.path.join(root,"meta_analysis", description)
     
-    Path(main_path).mkdir(parents=True, exist_ok=True)
+
 
     ###Meta Analysis
     build = meta["build"]
@@ -117,43 +105,7 @@ if __name__ == '__main__':
     #Architectures
     architectures =  build["architectures"]
     #Bayes Architectur
-    '''
-    This is the main investigation of my bachelor thesis:
 
-    Description of bayes_arc is given in bnnNet
-
-
-    Some examples:
-
-        Horizontal:
-            b_arc = 0.5
-        Vertical:
-            b_arc = [0, 0, 1, 0]
-
-        Proportional:
-            b_arc = [0, 0.4, 0.6, 1]
-
-        Neurons:
-            b_arc = [0, 6, 6, 1]
-
-        List:
-            b_arc =  [[0, 0, 0, 1], 
-                      [0, 0, 8, 0], 
-                      [0, 0, 9, 0, 0], 
-                      [0, 0, 4, 0, 0]] 
-
-
-        #TODO: What is not yet possible is to describe only the last layer, because that is dependent on how many layers an architecture has
-
-        (Note: In principle the input can't be Bayesian therefore it is always ignored)
-
-
-
-    If only specific Networks shall be learned and compared
-        o all_combinations_possible = False
-    	
-    
-    '''
     bayes_arcs = build["bayes_arcs"]
     #Combis
     all_combis = build["all_combinations_possible"]
@@ -318,7 +270,7 @@ if __name__ == '__main__':
 
     m_df = pd.DataFrame(np.median(final_losses,axis=-1),        index = str_arcs, columns= str_bayes_arcs)
     w_df = pd.DataFrame(np.median(wasserstein,axis=-1),index = str_arcs, columns= str_bayes_arcs)
-    t_df = pd.DataFrame(np.sum(training_time,axis=-1), index = str_arcs, columns= str_bayes_arcs)
+    t_df = pd.DataFrame(np.median(training_time,axis=-1), index = str_arcs, columns= str_bayes_arcs)
  
    
     with pd.ExcelWriter(os.path.join(main_path, "results.xlsx"), engine='xlsxwriter') as writer:
@@ -332,24 +284,11 @@ if __name__ == '__main__':
 
 '''
 
-Procrastination: Training von NN mit Progress Bar
-
-def start_progress(title):
-    global progress_x
-    sys.stdout.write(title + ": [" + "-"*40 + "]" + chr(8)*41)
-    sys.stdout.flush()
-    progress_x = 0
-
-def progress(x):
-    global progress_x
-    x = int(x * 40 // 100)
-    sys.stdout.write("#" * (x - progress_x))
-    sys.stdout.flush()
-    progress_x = x
-
-def end_progress():
-    sys.stdout.write("#" * (40 - progress_x) + "]\n")
-    sys.stdout.flush()
-
+description = "X" + str(meta["data"]["n_train"]) + \
+                  "_N" + str(meta["data"]["noise"])+ \
+                  "_E" + str(meta["training"]["epochs"]) + \
+                  "_Rho" + str(meta["training"]["rho"])
+    if meta["data"]["is_log"]:
+        description += "Log"
 
 '''

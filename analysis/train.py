@@ -2,18 +2,42 @@ import os
 import torch
 from torch import nn
 
-from visualize import plot_losses
+from visualize import plot_losses, plot_pretrain
 
 
-def train_net(net, x_train, y_train, hyper, path):
+def train_net(net, data, hyper, path):
     '''
-    Trains a Bayesian network (def line 16)
-        - lr = 0.001
+    Trains a Bayesian network
+        - input
+            o Network 
+            o Input 
+            o Output
+            o Hyperparameters as dictionary
+                * learning rate
+                * epochs
+                * pretrain_epochs (if exists in parent folder .pth, will use this one)
+                * sort
+                * elbo_dictionary
+                    o noise
+                    o samples
+                    o kl_weight
+                * logging
+            o Path to save plot of losses
+
+        - output
+            o last loss
+
+        Uses Adam-Optimizer for training
     '''
     #Logging
     logging = hyper["logging"]
+    plotting = True
+
+    #Data
+    x_train = data["x_train"]
+    y_train = data["y_train"]
+
     #Hyperparameters
-    
     epochs = hyper["epochs"]
     pretrain_epochs = hyper["pretrain_epochs"]
     lr = hyper["learning_rate"]
@@ -56,31 +80,37 @@ def train_net(net, x_train, y_train, hyper, path):
         return loss.item()
 
     #Check if pretrained Network is available
-    pretrain_path = os.path.join(path, os.pardir,"pretrain.pth")
+    pretrain_path = os.path.join(path, os.pardir,"pretrain")
     skip_pretrain = 0
 
-    
     if os.path.isfile(pretrain_path):
-        net.load_state_dict(torch.load(pretrain_path))
+        net.load_state_dict(torch.load(pretrain_path + ".pth"))
         net.set_pretrain(False)
-        skip_pretrain = pretrain_epochs + 1
+        skip_pretrain = pretrain_epochs
+    
         
 
 
+
+
+
+    ### Training Loop
     if logging: 
         print(f"\n \t Begin training")
-
-    # Train the net for 1000 epochs
+    
     for epoch in range(skip_pretrain, epochs):
         
-        # Change from pretrain to train
-        if epoch == pretrain_epochs:
-            net.set_pretrain(False)
-            torch.save(net.state_dict(), pretrain_path)
-
-
         loss = optimizer.step(closure)
         losses.append(loss)
+
+
+        ###Additional If-Loop Stuff
+
+        # Change from pretrain to train
+        if epoch == pretrain_epochs-1:
+            change_to_training(net, data, pretrain_path, plotting)
+                
+
         if sort:
             net.sort_bias()
 
@@ -92,9 +122,25 @@ def train_net(net, x_train, y_train, hyper, path):
             #     print(m.mu_b.data)
             #     print(m.rho_w.data)
 
-    plotting = True
+    
     if plotting:
         plot_losses(losses, os.path.join(path,"train.pdf"))
         
     #returns the final loss -> could also use losses
     return loss
+
+
+
+
+
+
+def change_to_training(net, data, pretrain_path, plotting):
+            '''
+            Plots the pretrained function
+            '''
+            if plotting:
+                 y_pred = net(data["x_train"]).detach().numpy()
+                 plot_pretrain(data, y_pred, pretrain_path)
+            net.set_pretrain(False)
+            torch.save(net.state_dict(), pretrain_path + ".pth")
+                 
