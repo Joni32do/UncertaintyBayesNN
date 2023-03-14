@@ -65,7 +65,7 @@ def experiment(arc, bayes_arc, trie, data, hyper, arc_path):
     final_loss = train_net(net, data, hyper, arc_path)
 
     #Save state dict
-    torch.save(net.state_dict(), arc_path + "model.pth")
+    torch.save(net.state_dict(), os.path.join(arc_path,"model.pth"))
 
 
     #Evaluation
@@ -85,7 +85,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     #File managment >>>> ENTER  N A M E  <<<<
     description = args.name
-    description = "Maroon 5"
 
     root =os.path.dirname(os.path.realpath(__file__))
     main_path = os.path.join(root,"meta_analysis", description)
