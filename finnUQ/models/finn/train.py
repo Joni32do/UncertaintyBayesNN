@@ -551,7 +551,7 @@ def run_training(print_progress=True, model_number=None):
                 model.func_r.sort_bias()
         
 
-        
+    
         
         # Create a plus or minus sign for the training error
         train_sign = "(-)"

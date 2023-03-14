@@ -350,7 +350,7 @@ def create_fig(data, y_preds, mean ,lower, upper, path = None):
 
 
 
-def experiment(arc, bayes_arc, t, data, hyper, arc_path):
+def experiment(arc, bayes_arc, trie, data, hyper, arc_path):
     '''
         - Parameter
             o arc - Architecture
@@ -365,7 +365,7 @@ def experiment(arc, bayes_arc, t, data, hyper, arc_path):
     
     '''
     #Location and name of file
-    path = os.path.join(arc_path, str(t))
+    path = os.path.join(arc_path, str(trie))
 
     #Network    
     net = BayesianNet(arc, bayes_arc, hyper["rho"])
@@ -382,12 +382,12 @@ def experiment(arc, bayes_arc, t, data, hyper, arc_path):
     y_preds,mean,lower,upper = eval_Bayes_net(net, data["x_eval"], data["n_samples"])
     loss_fn = nn.MSELoss() 
     mse = loss_fn(torch.tensor(mean),data["y_eval_mean"].squeeze())
-    water = calc_water(y_preds, data["y_eval"])
+    wasserstein = calc_water(y_preds, data["y_eval"])
 
     #Plotting
     create_fig(data, y_preds, mean, lower, upper, path)
 
-    return mse, water
+    return mse, wasserstein
 
 
 
@@ -504,10 +504,10 @@ if __name__ == '__main__':
 
         ###Experiment loops
 
-        #Stochasticy
+        #Architectures
         for i, arc in enumerate(architectures):
 
-            #Architectures
+            #Stochasticy
             for j,bayes_arc in enumerate(bayes_arcs):
                 print("Training architecture: ", arc, " with stochasticity ", bayes_arc, " model", (i*len(bayes_arcs)+j+1),"/",len(architectures)*len(bayes_arcs))
 
