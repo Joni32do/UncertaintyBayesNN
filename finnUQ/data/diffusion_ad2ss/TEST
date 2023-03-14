@@ -1,0 +1,1 @@
+  5. Vim will write the selected lines to the file TEST.  Use  :!dir  or  :!ls
