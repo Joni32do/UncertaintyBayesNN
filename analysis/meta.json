@@ -25,15 +25,15 @@
     },
     "training":{
         "rho":-2,
-        "epochs":7500,
-        "pretrain_epochs":5000,
-        "learning_rate":0.005,
+        "epochs":55000,
+        "pretrain_epochs":45000,
+        "learning_rate":0.003,
         "sort":true,
         "logging":false,
         "loss_fn":"elbo",
         "elbo":{
             "noise":0.01,
-            "samples":3,
+            "samples":5,
             "kl_weight":0
         }
     },
