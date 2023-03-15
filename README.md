@@ -38,25 +38,16 @@ Two methods:
 * Trains stochasticly with MSE
 * Uses the Wasserstein distance to compare actual distribution and distribution of bnn
 * Trained architectures:
-    *  $$
-        [[1, 32, 1],
-        [1, 8, 8, 1],
-        [1, 4, 9, 4, 1],
-        [1, 8, 4, 8, 1]]
-       $$
+    *  $$[[1, 32, 1],[1, 8, 8, 1],[1, 4, 9, 4, 1],[1, 8, 4, 8, 1]]$$
     * Horizontal bayes
-      * $$[[0], [0.5], [0.1], [1]]
-      $$
-    * Vertical bayes
-      * $$[[0, 0, 1],
-          [0, 0, 1, 0],
-          [0, 0, 0, 1, 0],
-          [0, 0, 1, 0, 0]]
-          $$
+      * $$[[0], [0.5], [0.1], [1]]$$
+    
     * Special case: Last Layer only
         * $$[[0,-1]]$$
     * Sparse with high uncertainty (rho)
-
+    
+    * Ommited but possible interesting investigations would be vertical bayes:
+     $$[[0, 0, 1],[0, 0, 1, 0],[0, 0, 0, 1, 0],[0, 0, 1, 0, 0]]$$
 
 Improvements:
 
