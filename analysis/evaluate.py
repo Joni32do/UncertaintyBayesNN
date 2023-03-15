@@ -19,7 +19,7 @@ def eval_Bayes_net(net, x_eval, samples, quantile = 0.025):
     return y_preds,mean,lower,upper
 
 
-def calc_water(y_preds, y_eval):
+def calc_water(y_preds, y_eval, evaluation_type = "mean"):
     '''
     calculates for each bar (single 1D coordinate of input space) with samples the wasserstein_distance 
     
@@ -33,5 +33,12 @@ def calc_water(y_preds, y_eval):
     water = np.zeros(bars)
     for i in range(bars):
         water[i] = wasserstein_distance(y_preds[i,:], y_eval[i,:])
-    return np.mean(water)
+    
+    if evaluation_type is "mean":
+        return np.mean(water)
+    elif evaluation_type is "mat":
+        return water
+    else:
+        raise NotImplementedError("This return type was not implemented for Wasserstein")
+
 

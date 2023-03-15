@@ -20,7 +20,6 @@ matplotlib.use('Agg')
 #Data
 import pandas as pd
 
-
 #Parameter json
 import json
 
@@ -33,9 +32,10 @@ from data import generate_data
 from visualize import plot_bayes
 from train import train_net
 from evaluate import eval_Bayes_net, calc_water
-'''
-Testframework
+from save_cycle import save_cycle_npy, save_cycle_xls, arcs2str
 
+'''
+Main file for executing the analysis
 
 '''
 
@@ -45,7 +45,7 @@ def experiment(arc, bayes_arc, trie, data, hyper, arc_path):
         - Parameter
             o arc - Architecture
             o bayes_arc - Bayesian Architecture
-            o t - number of try
+            o trie - number of try
             
             o data - dictionary containing data
             o hyper - dictionary containing hyperparameter for training
@@ -79,24 +79,29 @@ def experiment(arc, bayes_arc, trie, data, hyper, arc_path):
 
 
 
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-n","--name",default="debug", type=str,help="name of the folder where Analysis according to meta.json")
     args = parser.parse_args()
-    #File managment >>>> ENTER  N A M E  <<<<
-    description = args.name
 
     root =os.path.dirname(os.path.realpath(__file__))
-    main_path = os.path.join(root,"meta_analysis", description)
+    main_path = os.path.join(root,"meta_analysis", args.name)
     Path(main_path).mkdir(parents=True, exist_ok=True)
 
     #Load parameters from json
     with open(os.path.join(root,"meta.json"), 'r') as param:
         meta = json.load(param)
     
-    
-    
+    #Save parameters at main_path
+    with open(os.path.join(main_path, "meta_params.json"), "w") as fp:
+        json.dump(meta, fp)
 
+
+
+    ###########################
+    ## Assign Hyperparameter
 
     ###Meta Analysis
     build = meta["build"]
@@ -104,38 +109,43 @@ if __name__ == '__main__':
     #Architectures
     architectures =  build["architectures"]
     #Bayes Architectur
-
     bayes_arcs = build["bayes_arcs"]
-    #Combis
-    all_combis = build["all_combinations_possible"]
     #Multiple trainings with same params
     tries = build["tries"]
+    #Combis
+    all_combis = build["all_combinations_possible"]
     
 
     #Dataset
-    #   Calculate synthetic dataset and stores it in dictionary 
-    #   with the parameters
-    data_info = copy.deepcopy(meta["data"]) 
-    data = generate_data(data_info)
+    #Calculate dataset and stores it in dictionary with the parameters
+    data = generate_data(copy.deepcopy(meta["data"]) )
 
     #Training hyperparams
     hyper = meta["training"]
 
 
 
-    ###### Experiment
+
+
+    # Creating Excel Writer Object from Pandas  
+    str_arcs, str_bayes_arcs = arcs2str(architectures, bayes_arcs, all_combis)
+
+
+
+
+    ###########################
+    ## Experiment
     if all_combis:
 
-        ### Meassurements
+
+        #Initialize Metrics
         n_cases = len(architectures) * len(bayes_arcs) * tries
-        s_cases = (len(architectures),len(bayes_arcs),tries)
-        
-        #Time
-        training_time = np.zeros(s_cases)
-        
+        s_cases = (len(architectures),len(bayes_arcs),tries)        
         #Error meassure
         final_losses = np.zeros(s_cases)
         wasserstein = np.zeros(s_cases)
+        #Time
+        training_time = np.zeros(s_cases)
 
         
 
@@ -168,9 +178,13 @@ if __name__ == '__main__':
                 #TODO: Logging
                 plt.close()
                 print(f"\n    Architecture took: {(np.sum(training_time[i,j,:])):.3f} seconds")
+                #Save numpy ndarrays
+                save_cycle_npy(main_path, training_time, final_losses, wasserstein)
+                #Save excel files
+                save_cycle_xls(main_path, training_time, final_losses, wasserstein, str_arcs, str_bayes_arcs)
 
 
-    #Not all possible combinations
+    #Not all possible combinations TODO: Implement update
     else:
         assert len(architectures) == len(bayes_arcs)
         n_cases = len(architectures)
@@ -219,7 +233,7 @@ if __name__ == '__main__':
     print("## T R A I N I N G   E N D ##")
     print("############################# \n ")
     print("Trained parameters:")
-    print(description,"\n")
+    print(args.name,"\n")
 
     total_time = np.sum(training_time)
     print(f"Total time: {np.around(total_time,0)} seconds -> {np.around(total_time/3600,1)} hours \n")
@@ -237,17 +251,14 @@ if __name__ == '__main__':
     
 
     #Save numpy ndarrays
-    numpy_path = os.path.join(main_path,"results")
-    Path(numpy_path).mkdir(parents=True, exist_ok=True)
-    np.save(os.path.join(numpy_path, "final_losses"), final_losses)
-    np.save(os.path.join(numpy_path, "wasserstein"), wasserstein)
-    np.save(os.path.join(numpy_path, "training_time"), training_time)
+    save_cycle_npy(main_path, training_time, final_losses, wasserstein)
+    #Save excel files
+    save_cycle_xls(main_path, training_time, final_losses, wasserstein, str_arcs, str_bayes_arcs)
     
 
 
 
     # Saving the parameters from the meta.json file
-    #TODO: Write number of parameters
     meta["result"] = {"n_net": n_cases,
                       "time": total_time
                       }
@@ -256,29 +267,13 @@ if __name__ == '__main__':
         json.dump(meta, fp)
 
 
-    # Creating Excel Writer Object from Pandas  
-    str_arcs = [str(i) for i in architectures]
     
-    if all_combis:
-        str_bayes_arcs = [str(i) for i in bayes_arcs]
-    else:
-        str_bayes_arcs = ["experiment"]
-        for i, b_arc in enumerate(bayes_arcs):
-            str_arcs[i] = str_arcs[i] + str(b_arc)
 
 
-    m_df = pd.DataFrame(np.median(final_losses,axis=-1),        index = str_arcs, columns= str_bayes_arcs)
-    w_df = pd.DataFrame(np.median(wasserstein,axis=-1),index = str_arcs, columns= str_bayes_arcs)
-    t_df = pd.DataFrame(np.median(training_time,axis=-1), index = str_arcs, columns= str_bayes_arcs)
- 
-   
-    with pd.ExcelWriter(os.path.join(main_path, "results.xlsx"), engine='xlsxwriter') as writer:
-        m_df.to_excel(writer,sheet_name='Final Losses')   
-        w_df.to_excel(writer,sheet_name='Wasserstein')
-        t_df.to_excel(writer,sheet_name='Training Time')
-        
-        ws_mse = writer.sheets['Final Losses']
-        ws_mse.write_string(0,0,'Median')
+
+
+
+
 
 
 '''

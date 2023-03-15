@@ -17,7 +17,8 @@ class Simulator(object):
                  x_start_soil: Optional[float] = None,
                  x_stop_soil: Optional[float] = None,
                  alpha_l_sand: Optional[float] = None,
-                 v_e_sand: Optional[float] = None):
+                 v_e_sand: Optional[float] = None,
+                 is_noisy:bool = False):
         """Constructor method initializing the parameters.
 
         Args:
@@ -59,6 +60,13 @@ class Simulator(object):
         self.t_steps = t_steps
         self.rho_s = rho_s
         self.sand = sand
+
+
+        #TODO: Noises
+        self.is_noisy = is_noisy
+        self.noises = []
+        self.noise_factor = 0.1
+        
 
         if self.sand:
             self.n_e_sand = n_e_sand
@@ -108,6 +116,12 @@ class Simulator(object):
     def generate_sample(self):
         """Function that generates solution for PDE problem.
         """
+
+        #TODO: Added from Jonathan - Noises
+        self.noise = np.random.rand()
+        self.noises.append(self.noise)
+        ##
+        
         # Laplacian matrix for diffusion term
         nx = np.diag(-2*np.ones(self.x_steps), k=0)
         nx_minus_1 = np.diag(np.ones(self.x_steps-1), k=-1)
@@ -189,8 +203,12 @@ class Simulator(object):
             
             ##########################################################
             #Here I want to add NOISE
-            ret[self.x_start:self.x_stop] = self.f * \
-                self.sorpt_derivat(cw_soil) * (self.rho_s/self.n_e) + 1
+            if self.is_noisy:
+                noise = self.noise_factor/2 * cw_soil * (self.noise - 0.5) 
+            else:
+                noise = 0
+            ret[self.x_start:self.x_stop] = 1/ (self.f * \
+                self.sorpt_derivat(cw_soil) * (self.rho_s/self.n_e) + 1) + noise
             ##########################################################
 
 
@@ -198,7 +216,7 @@ class Simulator(object):
             # calculate change of cw and sk over over time
             cw_new = (self.disp*np.matmul(self.lap, cw) + dif_bound -
                       self.v * np.matmul(self.fd, cw) + f_hyd * cw +
-                      g_hyd) / ret
+                      g_hyd) * ret
 
             sk_new = np.zeros(self.x_steps)
             sk_new[self.x_start:self.x_stop] = - \

@@ -54,9 +54,15 @@ Meta training on the architectures
 * 80
 * 81
 * 82 First test with arbitrary BNN
-* 83 Test with trained BNN (but not noise data
+* 83 Test with trained BNN (but not noise data)
   
 
 * 90 Noisy Data
-
-* 95 Noisy Data long 
+  * 90 Generated 100 noisy data with uniform random adding to Retardation 
+    * -> 0.1 * random noise
+  * 91  -> 1 * random noise
+  * 92 -> 10 * random noise
+  * 93 0. 1 * gauss noise added to 1/R(c) --> changed (1-n_e)
+  * 94 0.001 * uniform added to 1/R(c) --> change back to (1)
+  * 95 0.01 * uniform verschoben auf (-0.5, 0.5)
+  * 96 0.1 * uniform verschoben

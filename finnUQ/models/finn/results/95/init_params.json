@@ -15,7 +15,7 @@
     "X_LENGTH": 55,
     "X_STEPS":28,
     "sandbool": true,
-    "number": 96, //should be the same like in config.json
+    "number": 95, //should be the same like in config.json
     "sand": {
         "top": 4,
         "bot": 24,

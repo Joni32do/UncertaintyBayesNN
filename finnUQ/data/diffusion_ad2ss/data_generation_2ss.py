@@ -23,7 +23,8 @@ from utils.configuration import Configuration
 
 
 def generate_sample(simulator: Simulator, visualize_data: bool,
-                    save_data: bool, train_data: bool, root_path: str):
+                    save_data: bool, train_data: bool, root_path: str,
+                    samples:int = 100, train_noisy:bool = False):
     """This function generates a data sample, visualizes it if desired and saves
     the data to file if desired.
 
@@ -42,12 +43,21 @@ def generate_sample(simulator: Simulator, visualize_data: bool,
     # sample_c corresponds to the dissolved concentration, sk to the kin.
     # sorbed mass concentrations
     sample_c, sample_sk = simulator.generate_sample()
+    if train_noisy:
+        sample_c_collection = [sample_c]
+        sample_sk_collection = [sample_sk]
+        for i in range(samples-1):
+            sample_c_temp, sample_sk_temp = simulator.generate_sample()
+            sample_c_collection.append(sample_c_temp)
+            sample_sk_collection.append(sample_sk_temp)
+        write_samples_to_file(root_path, simulator, sample_c_collection, sample_sk_collection, train_data)
+    
 
     if visualize_data:
         visualize_sample(sample_c=sample_c,
                          sample_sk=sample_sk,
                          simulator=simulator)
-    if save_data:
+    if save_data and not train_noisy:
         write_data_to_file(root_path=root_path, simulator=simulator,
                            sample_c=sample_c, sample_sk=sample_sk,
                            train_data=train_data)
@@ -89,6 +99,93 @@ def write_data_to_file(root_path: str, simulator: Simulator,
             arr=simulator.t)
     np.save(file=f"../../models/finn/results/{params.number}/x_series.npy",
             arr=simulator.x)
+
+    # Save if necessary training data.
+    if train_data:
+
+        # Create the data directory for the training data if it does not yet
+        # exist
+        data_path = os.path.join(root_path, "data"+"_train")
+        os.makedirs(data_path, exist_ok=True)
+
+        # Write the t- and x-series data along with the sample to file, (1/4)
+        # of simulation time.
+        np.save(file=os.path.join(data_path, "t_series.npy"),
+                arr=simulator.t[:len(simulator.t)//4 + 1])
+        np.save(file=os.path.join(data_path, "x_series.npy"), arr=simulator.x)
+        np.save(file=os.path.join(data_path, "sample_c.npy"),
+                arr=sample_c[:, :len(simulator.t)//4 + 1])
+        np.save(file=os.path.join(data_path, "sample_sk.npy"),
+                arr=sample_sk[:, :len(simulator.t)//4 + 1])
+
+        # Create the data directory for the extrapolation data if it does not
+        # yet exist.
+        data_path = os.path.join(root_path, "data"+"_ext")
+        os.makedirs(data_path, exist_ok=True)
+
+        # Write the t- and x-series data along with the sample to file, whole
+        # simulation time.
+        np.save(file=os.path.join(data_path, "t_series.npy"), arr=simulator.t)
+        np.save(file=os.path.join(data_path, "x_series.npy"), arr=simulator.x)
+        np.save(file=os.path.join(data_path, "sample_c.npy"), arr=sample_c)
+        np.save(file=os.path.join(data_path, "sample_sk.npy"), arr=sample_sk)
+
+    # Only save whole simulation time.
+    else:
+
+        # Create the data directory if it does not yet exist
+        data_path = os.path.join(root_path, "data"+"_test")
+        os.makedirs(data_path, exist_ok=True)
+
+        # Write the t- and x-series data along with the sample to file
+        np.save(file=os.path.join(data_path, "t_series.npy"), arr=simulator.t)
+        np.save(file=os.path.join(data_path, "x_series.npy"), arr=simulator.x)
+        np.save(file=os.path.join(data_path, "sample_c.npy"), arr=sample_c)
+        np.save(file=os.path.join(data_path, "sample_sk.npy"), arr=sample_sk)
+
+
+def write_samples_to_file(root_path: str, simulator: Simulator,
+                       sample_c_collection: np.ndarray, sample_sk_collection: np.ndarray,
+                       train_data: bool):
+    """Writes the given collection of samples to the according directory in .npy format.
+
+    Args:
+        root_path (str): The root_path of the script.
+        simulator (Simulator): The simulataor that created the data.
+        sample_c (np.ndarray): The dissolved concentration to be written to
+        file.
+        sample_sk (np.ndarray): The kinetically sorbed concentration to be
+        written to file.
+        train_data (bool): Indicates wheter to save (1/4) simulation time
+        training data.
+    """
+
+    # Make new folder in FINN framework in order to access parameters.
+    # If folder already exists, ignore.
+    params = Configuration("params.json")
+    os.makedirs(f"../../models/finn/results/{params.number}", exist_ok=True)
+
+    # Store parameters.
+    shutil.copyfile("params.json",
+                    f"../../models/finn/results/{params.number}/init_params.json")
+
+    # Stack solution and store it as .npy file.
+    # u_FD.shape: (x, t, 2)
+    sample_c = np.array(sample_c_collection)
+    sample_sk = np.array(sample_sk_collection)
+    u_FD = np.stack((sample_c, sample_sk), axis=-1)
+    np.save(file=f"../../models/finn/results/{params.number}/u_FD.npy",
+            arr=u_FD)
+
+    # Write the t- and x-series data.
+    np.save(file=f"../../models/finn/results/{params.number}/t_series.npy",
+            arr=simulator.t)
+    np.save(file=f"../../models/finn/results/{params.number}/x_series.npy",
+            arr=simulator.x)
+    
+    ###Noises
+    np.save(file=f"../../models/finn/results/{params.number}/x_series.npy",
+            arr=simulator.noises)
 
     # Save if necessary training data.
     if train_data:
@@ -207,6 +304,7 @@ def main():
 
     # Perform simulation with or without sand layer
     sand = params.sandbool
+    noisy = True
     if sand:
         simulator = Simulator(
             d_e=params.D_e,
@@ -229,7 +327,8 @@ def main():
             x_start_soil=params.sand.top,
             x_stop_soil=params.sand.bot,
             alpha_l_sand=params.sand.alpha_l,
-            v_e_sand=params.sand.v_e
+            v_e_sand=params.sand.v_e,
+            is_noisy = noisy
             )
     else:
         simulator = Simulator(
@@ -256,7 +355,8 @@ def main():
             visualize_data=False,
                     save_data=True,
                     train_data=True,
-                    root_path=root_path)
+                    root_path=root_path,
+                    samples=100, train_noisy=True)
 
 
 if __name__ == "__main__":

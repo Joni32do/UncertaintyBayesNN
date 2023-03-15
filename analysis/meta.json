@@ -1,14 +1,14 @@
 {
     "data":{
         "n_train":100,
-        "n_bars":20,
+        "n_bars":21,
         "n_samples":100,
         "n_plot":100,
         "noise":0.1,
         "noise_fn":"*",
-        "is_log":true,
+        "is_log":false,
         "lin":{
-            "min":0.1,
+            "min":0,
             "max":1
         },       
         "log":{

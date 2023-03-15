@@ -6,7 +6,7 @@ from bnnLayer import LinearBayes
 
 
 class BayesianNet(nn.Module):
-    def __init__(self, arc=[1,10,1], bayes_arc = [1], rho_w = -4, rho_b = None, elbo_hyper = None, init_pretrain = True):
+    def __init__(self, arc=[1,10,1], bayes_arc = [1], rho_w = -4, rho_b = None, elbo_hyper = None):
         super(BayesianNet, self).__init__()
         '''
         Generates a Bayesian network with customizable stochasticity  
@@ -70,7 +70,7 @@ class BayesianNet(nn.Module):
                             rho_b_prior = rho_b, 
                             bayes_factor_w = self.bayes_arc[i][0],
                             bayes_factor_b = self.bayes_arc[i][1], 
-                            pretrain=init_pretrain))
+                            pretrain=True))
                 
         self.layers = nn.ModuleList(layers)
         

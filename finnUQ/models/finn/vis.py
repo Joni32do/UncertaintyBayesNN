@@ -44,7 +44,7 @@ def __add_fig(fig, ax, row:float, column:float, title:str, value:np.ndarray,
     if is_c:
         cmap = 'viridis'
     else:
-        cmap = 'Greens'
+        cmap = 'YlOrBr'
     h = ax[row, column].imshow(value, cmap = cmap, interpolation='nearest', 
                     extent=[t.min(), t.max(),
                             x.min(), x.max()],
