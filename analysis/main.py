@@ -81,7 +81,7 @@ def experiment(arc, bayes_arc, trie, data, hyper, arc_path):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("-n","--name", help="name of the folder where Analysis according to meta.json")
+    parser.add_argument("-n","--name",default="debug", type=str,help="name of the folder where Analysis according to meta.json")
     args = parser.parse_args()
     #File managment >>>> ENTER  N A M E  <<<<
     description = args.name

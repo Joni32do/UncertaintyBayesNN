@@ -38,6 +38,7 @@ def plot_bayes(data, y_preds, mean ,lower, upper, path = None):
 
     ###Plot BNN
     plt.plot(data["x_eval"], mean, label='Average Prediction')
+
     plt.fill_between(data["x_eval"].squeeze(), 
                      lower.squeeze(),
                      upper.squeeze(), 
@@ -45,28 +46,37 @@ def plot_bayes(data, y_preds, mean ,lower, upper, path = None):
                      label='2.5%-97.5% Quantile')
     
     
-    #Scatter
-    plt.scatter(data["x_train"],
-                data["y_train"],
-                s = 1 , alpha = 0.8,
-                color = 'blue',
-                label="Train data")
     
     
-    x_rep = data["x_eval"].repeat_interleave(data["n_samples"],0)
+    
+    
+    #Scatter only for some bars
+    goal_bars = 6
+    scatter_sample = int(data["n_bars"]/(goal_bars-1))
+    #[0::scatter_sample]
+
+    x_bar_single = data["x_eval"][0::scatter_sample]
+    x_bars = x_bar_single.repeat_interleave(data["n_samples"],0)
+    y_bars_eval = data["y_eval"][0::scatter_sample,:].flatten()
+    y_bars_pred = y_preds[0::scatter_sample,:].flatten()
+
+    #Little shift to the right
     side_slide = 0.01
-    
     if data["is_log"]:
-        side_slide = 0.05 * x_rep
-    plt.scatter(x_rep,
-                torch.reshape(data["y_eval"],(data["n_samples"] * data["n_bars"],1)),
-                s = 0.5 , alpha = 0.5,
+        side_slide = 0.05 * x_bars
+
+
+    plt.scatter(x_bars,
+                y_bars_eval,
+                s = 2 , alpha = 0.3,
                 color = 'green',
                 label="stoch. dist.")
     
-    plt.scatter(x_rep + side_slide,
-                np.reshape(y_preds,(data["n_samples"] * data["n_bars"],1)),
-                s = 1 , alpha = 0.5,
+    # x_B = (x_rep + side_slide)
+    # y_B = np.reshape(y_preds,(data["n_samples"] * data["n_bars"],1))
+    plt.scatter(x_bars + side_slide,
+                y_bars_pred,
+                s = 2 , alpha = 0.3,
                 color = 'orange',
                 label="stoch. dist. BNN")
 
@@ -125,7 +135,9 @@ def plot_pretrain(data, mean, path = None):
 
 
 def plot_losses(losses, path):
-        plt.plot(losses)
+        shift = abs(np.min(losses)) + 0.0001
+        plot_losses = [x + shift for x in losses]
+        plt.plot(plot_losses)
         plt.yscale('log')
         plt.savefig(path)
 
