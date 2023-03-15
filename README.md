@@ -9,9 +9,8 @@ It is expected that you have a basic knowledge of neural networks. Otherwise the
 
 This bachelor thesis uses stochastic neural networks called BNN(Bayesian neural network). The key difference is that the parameters (weights and biases) have a probability distribution and not just single fixed value. This is motivated by Bayes law, hence the name
 
-$$
-    p(\theta|D) = \frac{p(D|\theta)p(\theta)}{p(D)}
-$$
+$$p(\theta|D) = \frac{p(D|\theta)p(\theta)}{p(D)}$$
+
 Where $p(\theta|D)$ is the Posterior, $p(D|\theta)$ is the Likelihood, $p(\theta)$ the prior and $p(D)$ the Evidence.
 
 
@@ -19,7 +18,8 @@ Two methods:
 
 - Training -- with Variational Inference:
      * Expects some distribution which can be describe by a few parameters e.g. Normal
-     * (variational) Parameters can be optimized like in NN 
+     * (variational) Parameters can be optimized like in NN
+     $$\psi = (\mathbf{\mu}, \mathbf{\rho})$$
 
 
 - Sampling -- with Monte Carlo Markov Chains (MCMC):
@@ -38,25 +38,16 @@ Two methods:
 * Trains stochasticly with MSE
 * Uses the Wasserstein distance to compare actual distribution and distribution of bnn
 * Trained architectures:
-    *  $$
-        [[1, 32, 1],
-        [1, 8, 8, 1],
-        [1, 4, 9, 4, 1],
-        [1, 8, 4, 8, 1]]
-       $$
+    *  $$[[1, 32, 1],[1, 8, 8, 1],[1, 4, 9, 4, 1],[1, 8, 4, 8, 1]]$$
     * Horizontal bayes
-      * $$[[0], [0.5], [0.1], [1]]
-      $$
-    * Vertical bayes
-      * $$[[0, 0, 1],
-          [0, 0, 1, 0],
-          [0, 0, 0, 1, 0],
-          [0, 0, 1, 0, 0]]
-          $$
+      * $$[[0], [0.5], [0.1], [1]]$$
+    
     * Special case: Last Layer only
         * $$[[0,-1]]$$
     * Sparse with high uncertainty (rho)
-
+    
+    * Ommited but possible interesting investigations would be vertical bayes:
+     $$[[0, 0, 1],[0, 0, 1, 0],[0, 0, 0, 1, 0],[0, 0, 1, 0, 0]]$$
 
 Improvements:
 
