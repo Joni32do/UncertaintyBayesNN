@@ -15,5 +15,6 @@ __pycache__/
 *.png
 *.pth
 *.sw?
+*.gif
 /bin
 /models/*/out/*

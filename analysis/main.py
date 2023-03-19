@@ -29,7 +29,7 @@ import json
 #Import custom function
 from bnnNet import BayesianNet
 from data import generate_data
-from visualize import plot_bayes
+from visualize import plot_bayes, plot_retardation
 from train import train_net
 from evaluate import eval_Bayes_net, calc_water
 from save_cycle import save_cycle_npy, save_cycle_xls, arcs2str
@@ -63,6 +63,7 @@ def experiment(arc, bayes_arc, trie, data, hyper, arc_path):
 
     #Train
     final_loss = train_net(net, data, hyper, arc_path)
+    # net.print_net()
 
     #Save state dict
     torch.save(net.state_dict(), os.path.join(arc_path,"model.pth"))
@@ -70,10 +71,15 @@ def experiment(arc, bayes_arc, trie, data, hyper, arc_path):
 
     #Evaluation
     y_preds,mean,lower,upper = eval_Bayes_net(net, data["x_eval"], data["n_samples"])
-    wasserstein = calc_water(y_preds, data["y_eval"])
+
+    #TODO: REMOVE
+    wasserstein = calc_water(y_preds, data["y_eval"],evaluation_type="mat")
+    print(f"(\n This is the wasserstein-metric for all bars {wasserstein}")
+    wasserstein = calc_water(y_preds, data["y_eval"],evaluation_type="mean")
 
     #Plotting
     plot_bayes(data, y_preds, mean, lower, upper, path)
+    plot_retardation(data, y_preds, mean, lower, upper, path)
 
     return final_loss, wasserstein
 

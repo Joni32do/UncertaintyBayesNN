@@ -1,12 +1,17 @@
 import numpy as np
 import torch
+import copy
 from torch import nn
 
 from bnnLayer import LinearBayes
 
 
+#Temporary
+import matplotlib as plt
+
+
 class BayesianNet(nn.Module):
-    def __init__(self, arc=[1,10,1], bayes_arc = [1], rho_w = -4, rho_b = None, elbo_hyper = None):
+    def __init__(self, arc=[1,10,1], bayes_arc = [1], rho_w = -4, rho_b = None, elbo_hyper = None, init_pretrain = True):
         super(BayesianNet, self).__init__()
         '''
         Generates a Bayesian network with customizable stochasticity  
@@ -46,10 +51,10 @@ class BayesianNet(nn.Module):
                 >> assemble_bayes_arc <<
         '''
         #Initialize
-        self.layers_n = len(arc)
+        self.n_layers = len(arc)
         self.elbo_hyper = elbo_hyper
-        self.activation_fn = torch.nn.Tanh()
-
+        self.activation_fn = torch.nn.ReLU()
+        self.pretrain = init_pretrain
 
         #Priors can be initialized differently
         if rho_b is None:
@@ -64,17 +69,22 @@ class BayesianNet(nn.Module):
 
         #creates a list with Linear Bayes layers of specified architectur
         layers = []
-        for i in range(self.layers_n-1):
+        for i in range(self.n_layers-1):
             layers.append(LinearBayes(arc[i],arc[i+1],
                             rho_w_prior = rho_w, 
                             rho_b_prior = rho_b, 
                             bayes_factor_w = self.bayes_arc[i][0],
                             bayes_factor_b = self.bayes_arc[i][1], 
-                            pretrain=True))
+                            pretrain=init_pretrain))
                 
         self.layers = nn.ModuleList(layers)
         
-
+        self.n_sampled = 0
+        for layer in self.layers:
+            self.n_sampled += layer.sampled_params
+        #For plotting ELBO
+        self.log_like = 0
+        self.log_prior = 0
 
 
     #Training routines
@@ -89,30 +99,35 @@ class BayesianNet(nn.Module):
         '''
         for layer in self.layers:
             layer.activate_pretrain(pretrain)
+        self.pretrain = pretrain
 
     #ELBO loss
     def sample_elbo(self, x, y, samples, noise, kl_weight):
-
+        if self.pretrain:
+            return nn.MSELoss()(self.forward(x),y)
         n = y.size()[0]
         log_likes = torch.empty((samples,n,1))
         log_priors = torch.empty((samples,))
-        log_posts = torch.empty((samples,))
-        noise = torch.ones_like(y) * noise
+        # log_posts = torch.empty((samples,))
+
+        #This has to be changed, if the true distribution want to be described
+        noise = torch.reshape(torch.logspace(-2,0,len(y)), y.shape) * noise
         
         for i in range(samples):
             pred = self.forward(x)
             log_likes[i] = torch.distributions.Normal(y, noise).log_prob(pred)
-            log_priors[i] = self.log_prior()
-            log_posts[i] = self.log_post()
-        log_post = log_posts.mean()
-        log_prior = log_priors.mean()
-        log_like = log_likes.mean()
+            log_priors[i] = self.get_log_prior()
+            # log_posts[i] = self.log_post()
+        
+        # log_post = log_posts.mean()
+        self.log_prior = kl_weight *log_priors.mean()
+        self.log_like = -log_likes.mean()
 
-        elbo_loss = kl_weight * (log_post - log_prior) - log_like
+        elbo_loss = self.log_prior + self.log_like
         return elbo_loss
 
 
-    def log_prior(self):
+    def get_log_prior(self):
         '''
         Calculates the prior over all variational layers
             
@@ -121,7 +136,7 @@ class BayesianNet(nn.Module):
         log_prior = 0
         for layer in self.layers:
             log_prior += layer.get_log_prior()
-        return log_prior
+        return log_prior/self.n_sampled
     
     def log_post(self):
         '''
@@ -138,7 +153,7 @@ class BayesianNet(nn.Module):
     def forward(self, x):
         
         for idx, layer in enumerate(self.layers):
-            if idx < self.layers_n - 2: 
+            if idx < self.n_layers - 2: 
                 x = self.activation_fn(layer(x))
             else: #last layer
                 x = layer(x)
@@ -177,7 +192,7 @@ class BayesianNet(nn.Module):
             #Checks if last layer special (and removes instruction which is the first entry)
             middle, last  = self.get_last_layer(bayes_arc)
                    
-            for i in range(self.layers_n - 2):
+            for i in range(self.n_layers - 2):
                 bayes_arc.append(middle)
 
             bayes_arc.append(last)
@@ -216,3 +231,76 @@ class BayesianNet(nn.Module):
                 middle = bayes_arc.pop(0)
                 last = middle
         return middle, last
+    
+    '''
+    Functions to plot the network
+    
+    '''
+    def get_net_params(self):
+        mu_w = []
+        mu_b = []
+        rho_w = []
+        rho_b = []
+        for layer in self.layers:
+            #Append mean
+            mu_w.append(copy.deepcopy(layer.mu_w).detach().numpy())
+            mu_b.append(copy.deepcopy(layer.mu_b).detach().numpy())
+            
+            #Append variance
+            rho_w_full = copy.deepcopy(layer.rho_w).detach().numpy()
+            rho_b_full = copy.deepcopy(layer.rho_b).detach().numpy()
+            # is_not_bayes_w = not copy.deepcopy(layer.is_bayes_w).detach.numpy()
+            # is_not_bayes_b = not copy.deepcopy(layer.is_bayes_b).detach.numpy()
+            rho_w_sparse = rho_w_full
+            rho_b_sparse = rho_b_full
+            rho_w.append(rho_w_sparse)
+            rho_b.append(rho_b_sparse)
+            #Set variance of not sampled points to -100
+
+
+        return mu_w, mu_b, rho_w, rho_b
+    
+    def print_net(self):
+        mu_w, mu_b, rho_w, rho_b = self.get_net_params() 
+        print("The mean of the weights ", mu_w)
+        print("The mean of the biases ", mu_b)
+        print("The standard deviation of the weights ",rho_w)
+        print("The standard deviation of the biases ",rho_b)
+
+
+    def plot_network(self):
+        mu_w, mu_b, rho_w, rho_b = self.get_net_params()
+        img_mu = self.draw_weight_bias(mu_w,mu_b)
+        img_rho = self.draw_weight_bias(rho_w, rho_b)
+        fig,axes = plt.subplots
+
+    def draw_weight_bias(self, weights, biases):
+        '''
+            Expects an list of the weights and the biases 
+        '''
+        lcm = np.lcm(self.arc)
+        height = lcm
+        bias_width = np.ceil(0.2*lcm)
+        width = (self.n_layers-1)*(lcm + bias_width)
+        img = np.zeros(width, height)
+        for i in range(self.n_layers-1):
+            img[:,i*lcm:(i+1)*lcm] = self.draw_weight_bias_block(weights[i],biases[i],bias_width)
+        return img
+
+    def draw_weight_bias_block(self, weight, bias,bias_width):
+        lcm = np.lcm(self.arc)
+        height, width = weight.shape
+        height_factor = int(lcm/height)
+        width_factor = int(lcm/width)
+        longer_weight = np.repeat(weight, height_factor, axis = 0)
+        longer_weight = np.repeat(longer_weight, width_factor, axis = 1)
+        
+        bias_factor = int(lcm/len(bias))
+        bias = np.reshape(bias, (len(bias),1))
+        longer_bias = np.repeat(bias, bias_factor, axis = 0)
+        longer_bias = np.repeat(bias, bias_width, axis = 1)
+        return np.concatenate((longer_weight,longer_bias),axis = 1)
+
+        
+
+

@@ -44,7 +44,7 @@ class LinearBayes(nn.Module):
         if not torch.is_tensor(rho_w_prior):
             rho_w_prior = rho_w_prior*torch.ones(n_out,n_in)
         if  not torch.is_tensor(mu_b_prior):
-            mu_b_prior = mu_b_prior +  init_scale *(torch.rand(n_out) - 0.5)
+            mu_b_prior = mu_b_prior +  torch.zeros(n_out)
         if not torch.is_tensor(rho_b_prior):
             rho_b_prior = rho_b_prior*torch.ones(n_out)
 
@@ -56,9 +56,10 @@ class LinearBayes(nn.Module):
         self.prior_sigma = 0.1
         self.mu_w_prior = Normal(mu_w_prior, self.prior_sigma)
         self.mu_b_prior = Normal(mu_b_prior, self.prior_sigma)
+        self.rho_w_prior = rho_w_prior
+        self.rho_b_prior = rho_b_prior
 
-        #I think this is bullshit
-        self.prior = torch.distributions.Normal(0, 1)
+
 
 
         #Initialize distribution as priors
@@ -91,6 +92,9 @@ class LinearBayes(nn.Module):
             self.is_bayes_w[:bayes_factor_w] = 1
         if bayes_factor_b != 0:
             self.is_bayes_b[:bayes_factor_b] = 1
+        self.sampled_params = torch.sum(self.is_bayes_b) + torch.sum(self.is_bayes_w)
+
+
          
 
     def sample(self, stochastic = True):
@@ -141,18 +145,24 @@ class LinearBayes(nn.Module):
         return sorted_indices
   
     def get_log_prior(self):
-        log_prob_w = self.mu_w_prior.log_prob(self.weights).sum()
-        log_prob_b = self.mu_b_prior.log_prob(self.bias).sum()
-        return  log_prob_w + log_prob_b 
+        # log_prob_w = self.mu_w_prior.log_prob(self.weights).sum()
+        # log_prob_b = self.mu_b_prior.log_prob(self.bias).sum()
+        # log_prob =  log_prob_w + log_prob_b 
+        if self.sampled_params == 0:
+            return 0
+        else:
+            return (torch.relu(-self.rho_w +self.rho_w_prior).sum() + torch.relu(-self.rho_b + self.rho_b_prior).sum())
+        # print(f"Penalize  {penalizing_term} Prob {log_prob}")
+        # return penalizing_term
 
     def get_log_post(self):
         '''
         For sparse Bayes this adds a constant
         '''
-        w_post = torch.distributions.Normal(
-            self.mu_w, torch.log(1 + torch.exp(self.rho_w)))
-        b_post = torch.distributions.Normal(
-            self.mu_b, torch.log(1 + torch.exp(self.rho_b)))
+        # w_post = torch.distributions.Normal(
+        #     self.mu_w, torch.log(1 + torch.exp(self.rho_w)))
+        # b_post = torch.distributions.Normal(
+        #     self.mu_b, torch.log(1 + torch.exp(self.rho_b)))
         return 0 #w_post.log_prob(self.weights).sum() + b_post.log_prob(self.bias).sum()
     
 

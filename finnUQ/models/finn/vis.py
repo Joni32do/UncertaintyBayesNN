@@ -10,6 +10,7 @@ import torch as th
 import torch.nn as nn
 
 import matplotlib.pyplot as plt
+import matplotlib
 
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import sys
@@ -45,7 +46,9 @@ def __add_fig(fig, ax, row:float, column:float, title:str, value:np.ndarray,
         cmap = 'viridis'
     else:
         cmap = 'YlOrBr'
-    h = ax[row, column].imshow(value, cmap = cmap, interpolation='nearest', 
+    #, norm=matplotlib.colors.SymLogNorm(linthresh = 0.000001)
+    h = ax[row, column].imshow(value, cmap = cmap,  
+                               interpolation='nearest', 
                     extent=[t.min(), t.max(),
                             x.min(), x.max()],
                     origin='upper', aspect='auto')
@@ -58,7 +61,7 @@ def __add_fig(fig, ax, row:float, column:float, title:str, value:np.ndarray,
     ax[row, column].set_ylim(x.min(), x.max())
     ax[row, column].set_xlabel('$t [d]$', fontsize=font_size)
     ax[row, column].set_ylabel('$x [cm]$', fontsize=font_size)
-    ax[row, column].set_title(title, fontsize = font_size)
+    ax[row, column].set_title(title, fontsize = 1.5*font_size)
     for label in (ax[row, column].get_xticklabels() + ax[row, column].get_yticklabels()): 
         label.set_fontsize(font_size)
 
@@ -99,18 +102,18 @@ def vis_FD_NN(u_FD:np.ndarray, u_NN:np.ndarray,
     t:np.ndarray, x:np.ndarray, save_path = None):
 
     fig, ax = plt.subplots(2, 2)
+    fig.set_size_inches(17,16)
+    
+    title_c = r"$c(x,t) \left[\frac{\mu g}{cm^3}\right]$"
+    title_s = r"$s_k(x,t) \left[\frac{\mu g}{g}\right]$"
 
-    
-    title_c = r"$c(t,x) \left[\frac{\mu g}{cm^3}\right]$"
-    title_s = r"$s_k(t,x) \left[\frac{\mu g}{g}\right]$"
-    
-    __add_fig(fig=fig, ax=ax, row=0, column=0, title=r"FD: " + title_c, 
+    __add_fig(fig=fig, ax=ax, row=0, column=0, title=r"$D_{synth}$: " + title_c, 
         value=u_FD[...,0], x=x, t=t, is_c=True)
-    __add_fig(fig=fig, ax=ax, row=1, column=0, title=r"FD: " + title_s, 
+    __add_fig(fig=fig, ax=ax, row=1, column=0, title=r"$D_{synth}$: " + title_s, 
         value=u_FD[...,1], x=x, t=t)
-    __add_fig(fig=fig, ax=ax, row=0, column=1, title=r"FINN: " +title_c, 
+    __add_fig(fig=fig, ax=ax, row=0, column=1, title=r"BNN in FINN: " +title_c, 
         value=u_NN[...,0], x=x, t=t, is_c = True)
-    __add_fig(fig=fig, ax=ax, row=1, column=1, title=r"FINN: " +title_s, 
+    __add_fig(fig=fig, ax=ax, row=1, column=1, title=r"BNN in FINN: " +title_s, 
         value=u_NN[...,1], x=x, t=t)
     
     if save_path is not None:
@@ -139,17 +142,20 @@ def vis_diff(u_FD:np.ndarray, u_NN:np.ndarray, t:np.ndarray,
             diff_c = np.log10(diff_c)
             diff_sk = np.log10(diff_sk)
     else:
-        diff_c = u_FD[...,0] - u_NN[...,0]
-        diff_sk = u_FD[...,1] - u_NN[...,1]
+        diff_c = np.abs(u_FD[...,0] - u_NN[...,0])
+        diff_sk = np.abs(u_FD[...,1] - u_NN[...,1])
 
     fig, ax = plt.subplots(1,2)
+    fig.set_size_inches(19,8)
     ax = np.expand_dims(ax, axis=0)
     # print(ax.shape)
     
 
     #Generate titles for plots
-    title_c, title_s = generate_plot_title(squared, log_value)
-           
+    # title_c, title_s = generate_plot_title(squared, log_value)
+
+    title_c = r"$c_{upper} - c_{lower} \left[\frac{\mu g}{cm^3}\right]$"
+    title_s = r"$s_{k,upper} - s_{k,lower} \left[\frac{\mu g}{g}\right]$"
 
     __add_fig(fig=fig, ax=ax, row=0, column=0, title= title_c,
         value=diff_c, x=x, t=t, is_c = True)
@@ -170,8 +176,8 @@ def generate_plot_title(squared, log_value):
             title_s += r"\log("
         title_c += r"("
         title_s += r"("
-    title_c += r"c_{FD} - c_{FINN}"
-    title_s += r"s_{k, FD} - s_{k, FINN}"
+    title_c += r"c_{D_{synth}} - c_{BNN}"
+    title_s += r"s_{k, D_{synth}} - s_{k, BNN}"
     if squared:
         title_c += r")^2 "
         title_s += r")^2 "
@@ -182,23 +188,32 @@ def generate_plot_title(squared, log_value):
     title_s += r"\left[\frac{\mu g}{g}\right]$"
     return title_c,title_s
 
-def vis_btc(u, u_hat, t, lower = None, upper = None, save_path = None):
+def vis_btc(u, u_hat, t, lower = None, upper = None, save_path = None, experimental_data:bool = False):
     font_size =  FONT_SIZE
     fig, ax = plt.subplots(1,1)
-
+    fig.set_size_inches(8,6)
     # plot BTC
     ax.set_xlabel("t [d]", fontsize=font_size)
     ax.set_ylabel("$c \left[\\frac{\mu g}{cm^3}\\right]$", fontsize=font_size)
-    ax.set_title("Conc. of PFOS at outflow", fontsize=font_size)
+    # ax.set_title("Conc. of PFOS at outflow", fontsize=font_size)
+    # ax.set_yscale('log')
     
-    ax.plot(t, u[-1,:,0], color="b", label="FD")
-    ax.plot(t, u_hat[-1,:,0], color="g", label="FINN")
+    if experimental_data:
+        x = np.array([0,3,6,9,13,16,20,23,27,30,34,37,41,45,48,52,55,69,83,97,142,142])
+        x[1:-1] = (x[1:-1] + x[:-2])/2 
+        y = np.array([0,0.03,0.023,0.0099,0.0051,0.0017,0.00054,0.00073,0.00051,0.00035,0.00025,0.00019,0.00015,0.00011,0.000093,0.000061,0.000068,0.000052,0.00004,0.000029,0.000031,0.000015])
+
+        # y = [0,30000,23000,9900,5100,1700,540,730,510,350,250,190,150,110,93,61,68,52,40,29,31]
+        ax.plot(x,y, '-o', label = 'Experimental data')
+    else:
+        ax.plot(t, u[-1,:,0], label=r"$D_{synth}$")
+
+    ax.plot(t, u_hat[-1,:,0], label="BNN in FINN")
 
     if upper is not None and lower is not None:
-        print(lower[-1,:,0])
-        print(upper[-1,:,0])
-        
-        ax.fill_between(t, lower[-1,:,0], upper[-1,:,0], label='BNN margin')
+        print(upper[-1,:,0] - lower[-1,:,0])
+        ax.fill_between(t, lower[-1,:,0], upper[-1,:,0], color='orange',label='BNN margin')
+
 
     ax.legend(fontsize=font_size)
     plt.locator_params(axis="x", nbins=6)
@@ -236,7 +251,7 @@ def vis_sk_end(u, u_hat, t, x, config_NN, save_path = None):
         plt.show()
 
 def vis_sorption_isotherms(model, u, u_hat, t, x, config_NN:Configuration):
-    font_size = 22
+    font_size = FONT_SIZE
     fig, ax = plt.subplots()
     dt = t[1]-t[0]
     # plot sk over cw
@@ -254,6 +269,11 @@ def vis_sorption_isotherms(model, u, u_hat, t, x, config_NN:Configuration):
     ax.legend(fontsize=font_size, loc='center left', bbox_to_anchor=(1, 0.5))
     for label in (ax.get_xticklabels() + ax.get_yticklabels()): label.set_fontsize(font_size)
     plt.show()
+
+
+
+
+
 
 
 FONT_SIZE = 12
@@ -281,16 +301,16 @@ if __name__ == "__main__":
     os.makedirs(save_path, exist_ok=True)
 
     # visualize
-
+    IS_EXP = False
     #print model
     # print(model.__dict__)
     vis_FD_NN(u, u_NN, t, x, os.path.join(save_path,"FD_NN.pdf"))
     vis_diff(u, u_NN, t, x, save_path = os.path.join(save_path,"Diff.pdf"))
-    vis_diff(u, u_NN, t, x, squared = True, save_path = os.path.join(save_path,"DiffSq.pdf"))
+    # vis_diff(u, u_NN, t, x, squared = True, save_path = os.path.join(save_path,"DiffSq.pdf"))
 
     # vis_diff(u, u_NN, t, x, squared = True, 
     #          log_value=True, save_path = os.path.join(save_path,"DiffLog.pdf"))
-    vis_btc( u, u_NN, t, x, save_path = save_path)
+    vis_btc( u, u_NN, t, x, save_path = save_path,experimental_data = IS_EXP)
 
     if config.bayes.is_bayes:
         if save_path is not None:
@@ -298,13 +318,26 @@ if __name__ == "__main__":
         else:
             bnn_path = None
         os.makedirs(bnn_path, exist_ok=True)
-        vis_diff(u, mean, t, x, squared = True, save_path= os.path.join(bnn_path,"Bayes_MeanDiffSq.pdf"))
+        vis_diff(lower, upper, t, x, save_path= os.path.join(bnn_path,"Diff_Lower_Upper.pdf"))
         # vis_diff(u, median, t, x, squared = True, save_path = os.path.join(bnn_path,"Bayes_Diff.pdf"))
-        vis_diff(u, lower, t, x, squared = True, save_path = os.path.join(bnn_path,"Bayes_LowerDiffSq.pdf"))
-        vis_diff(u, upper, t, x, squared = True, save_path = os.path.join(bnn_path,"Bayes_UpperDiffSq.pdf"))
-        vis_FD_NN(u, lower - upper, t, x, save_path = os.path.join(bnn_path,"Bayes_DifferenceLowerUpper.pdf"))
-        vis_btc(u,mean,t,lower,upper,bnn_path)
+        # vis_diff(u, lower, t, x, squared = True, save_path = os.path.join(bnn_path,"Bayes_LowerDiffSq.pdf"))
+        # vis_diff(u, upper, t, x, squared = True, save_path = os.path.join(bnn_path,"Bayes_UpperDiffSq.pdf"))
+        # vis_FD_NN(u,  - , t, x, save_path = os.path.join(bnn_path,"Bayes_DifferenceLowerUpper.pdf"))
+        vis_btc(u,mean,t,lower,upper,bnn_path,experimental_data = IS_EXP)
 
 
 
     # vis_sorption_isotherms(model, u, u_NN, t, x, config_NN)
+
+    '''
+    Time in days
+    [0,3,6,9,13,16,20,23,27,30,34,37,41,45,48,52,55,69,83,97,142]
+    Amount PFOS in [\mu g/cm^3]
+    [0,30000,23000,9900,5100,1700,540,730,510,350,250,190,150,110,93,61,68,52,40,29,31]
+
+    x = [0,3,6,9,13,16,20,23,27,30,34,37,41,45,48,52,55,69,83,97,142
+    y = [0,30000,23000,9900,5100,1700,540,730,510,350,250,190,150,110,93,61,68,52,40,29,31]
+    plt.plot(x,y)
+    plt.yscale('log')
+    plt.show()
+    '''

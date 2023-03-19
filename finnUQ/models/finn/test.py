@@ -28,13 +28,24 @@ def run_testing(print_progress=False, visualize=False, model_number=None):
     # Load the user configurations
     config = Configuration("config.json")
     
+    
+    
+    #### ADDED FROM ME FOR UQ
+    model_nn_path = os.path.abspath("state_dict_retardation/model.pth")
+    
+    
+    
+    
+    
     # Append the model number to the name of the model
     model_number = config.model.number if model_number is None else model_number
     config.model.name = config.model.name + "_" + str(model_number).zfill(2)
     root_path = os.path.abspath("../../data")
     data_path = os.path.join(root_path, config.data.type, config.data.name)
     
-    model_nn_path = os.path.abspath("state_dict_retardation/model.pth")
+
+
+    
 
     # Print some information to console
     print("Model name:", config.model.name)

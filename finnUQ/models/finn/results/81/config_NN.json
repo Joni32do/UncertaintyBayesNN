@@ -19,8 +19,7 @@
   "number": 81,
   "layer_sizes": [
    1,
-   8,
-   8,
+   32,
    1
   ]
  },
@@ -29,10 +28,10 @@
   "pretrain_epochs": 50,
   "sort": false,
   "bayes_arc": [
-   0,
-   0,
-   4,
-   1
+   [
+    0,
+    -1
+   ]
   ],
   "runs": 20
  },

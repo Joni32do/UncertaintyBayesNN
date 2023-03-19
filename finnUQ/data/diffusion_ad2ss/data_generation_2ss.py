@@ -19,7 +19,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from simulator_2ss import Simulator
 
 sys.path.append("..")
-from utils.configuration import Configuration
+from configuration import Configuration
 
 
 def generate_sample(simulator: Simulator, visualize_data: bool,
@@ -81,23 +81,25 @@ def write_data_to_file(root_path: str, simulator: Simulator,
 
     # Make new folder in FINN framework in order to access parameters.
     # If folder already exists, ignore.
-    params = Configuration("params.json")
-    os.makedirs(f"../../models/finn/results/{params.number}", exist_ok=True)
+    params = Configuration(os.path.join(root_path,"params.json"))
+    
+    data_path = os.path.abspath(os.path.join(root_path,os.pardir, os.pardir,"models","finn","results",str(params.number)))
+    os.makedirs(data_path, exist_ok=True)
 
     # Store parameters.
-    shutil.copyfile("params.json",
-                    f"../../models/finn/results/{params.number}/init_params.json")
+    shutil.copyfile(os.path.join(root_path,"params.json"),
+                    os.path.join(data_path,"init_params.json"))
 
     # Stack solution and store it as .npy file.
     # u_FD.shape: (x, t, 2)
     u_FD = np.stack((sample_c, sample_sk), axis=-1)
-    np.save(file=f"../../models/finn/results/{params.number}/u_FD.npy",
+    np.save(file=os.path.join(data_path,"u_FD.npy"),
             arr=u_FD)
 
     # Write the t- and x-series data.
-    np.save(file=f"../../models/finn/results/{params.number}/t_series.npy",
+    np.save(file=os.path.join(data_path,"t_series.npy"),
             arr=simulator.t)
-    np.save(file=f"../../models/finn/results/{params.number}/x_series.npy",
+    np.save(file=os.path.join(data_path,"x_series.npy"),
             arr=simulator.x)
 
     # Save if necessary training data.
@@ -162,7 +164,7 @@ def write_samples_to_file(root_path: str, simulator: Simulator,
 
     # Make new folder in FINN framework in order to access parameters.
     # If folder already exists, ignore.
-    params = Configuration("params.json")
+    params = Configuration(os.path.join(root_path,"params.json"))
     os.makedirs(f"../../models/finn/results/{params.number}", exist_ok=True)
 
     # Store parameters.
@@ -192,7 +194,7 @@ def write_samples_to_file(root_path: str, simulator: Simulator,
 
         # Create the data directory for the training data if it does not yet
         # exist
-        data_path = os.path.join(root_path, "data"+"_train")
+        data_path = os.path.join(root_path, "data_train")
         os.makedirs(data_path, exist_ok=True)
 
         # Write the t- and x-series data along with the sample to file, (1/4)
@@ -207,7 +209,7 @@ def write_samples_to_file(root_path: str, simulator: Simulator,
 
         # Create the data directory for the extrapolation data if it does not
         # yet exist.
-        data_path = os.path.join(root_path, "data"+"_ext")
+        data_path = os.path.join(root_path, "data_ext")
         os.makedirs(data_path, exist_ok=True)
 
         # Write the t- and x-series data along with the sample to file, whole
@@ -296,11 +298,11 @@ def main():
     Main method used to create the datasets.
     """
     # Determine the root path for this script and set up a path for the data
-    root_path = os.path.abspath("")
+    root_path = os.path.dirname(__file__)
 
     # Meta data specification is recommended to be done in params.json, since
     # data is reused in the results folder of FINN 2SS Sorption.
-    params = Configuration("params.json")
+    params = Configuration(os.path.join(root_path,"params.json"))
 
     # Perform simulation with or without sand layer
     sand = params.sandbool
@@ -328,7 +330,8 @@ def main():
             x_stop_soil=params.sand.bot,
             alpha_l_sand=params.sand.alpha_l,
             v_e_sand=params.sand.v_e,
-            is_noisy = noisy
+            is_noisy = params.is_noisy,
+            noise=params.noise
             )
     else:
         simulator = Simulator(
@@ -352,11 +355,11 @@ def main():
 
     # Create train and ext data
     generate_sample(simulator=simulator,
-            visualize_data=False,
+            visualize_data=True,
                     save_data=True,
                     train_data=True,
                     root_path=root_path,
-                    samples=100, train_noisy=True)
+                    samples=params.noise_samples, train_noisy=False)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,9 @@
 import matplotlib.pyplot as plt
 import torch
 import numpy as np
+import os
+
+import matplotlib.animation as a
 
 from data import noise_function
 
@@ -63,7 +66,7 @@ def plot_bayes(data, y_preds, mean ,lower, upper, path = None):
     y_bars_pred = y_preds[0::scatter_sample,:].flatten()
 
     #Little shift to the right
-    side_slide = 0.01
+    side_slide = 0.007
     if data["is_log"]:
         side_slide = 0.05 * x_bars
 
@@ -195,7 +198,7 @@ def plot_pretrain(data, mean, path = None):
     ###Plot true function
     x = data["x_true"].squeeze()
     y = data["y_true"].squeeze()
-    plt.plot(x,y, label='Noiseless function')
+    plt.plot(x,y, label='$R(c)$')
 
     #Plot 2sigma environment
     noise_fn = noise_function(data["noise"], data["noise_fn"])
@@ -214,7 +217,7 @@ def plot_pretrain(data, mean, path = None):
     
     plt.legend()
     plt.xlabel(r"Concentration $c(x,t)$ in $\left[\frac{\mu g}{cm^3} \right]$")
-    plt.ylabel(r"Retardation factor $\bar{R}(c)$")
+    plt.ylabel(r"Retardation factor $\frac{1}{R(c)}$")
     if path is not None:
         plt.savefig(path + ".pdf")
     else:
@@ -223,11 +226,99 @@ def plot_pretrain(data, mean, path = None):
 
 
 
+def plot_pretrain_retardation(data, mean, path = None):
+    fig,ax = plt.subplots(1,1,figsize=(8,5))
+    if data["is_log"]:
+        ax.set_xscale('log')
+
+    # ax.set_yscale('log')
+    
+    ###Plot true function
+    x = data["x_true"].squeeze()
+    y = data["y_true"].squeeze()
+    plt.plot(x,1/y, label='$R(c)$')
+
+    #Plot 2sigma environment
+    noise_fn = noise_function(data["noise"], data["noise_fn"])
+    upper_true = 1/(y + 2*noise_fn(x))
+    lower_true = 1/(y - 2* noise_fn(x))
+    plt.fill_between(x,lower_true, upper_true, alpha=0.4, label='True distribution')
+
+    ###Plot BNN
+    plt.plot(data["x_train"], 1/mean, label='Pretrained NN')
+
+
+    #Scatter
+    plt.scatter(data["x_train"],
+                1/data["y_train"],
+                s = 1 , alpha = 0.8,
+                color = 'blue',
+                label="Train data")
+    
+    plt.legend()
+    plt.xlabel(r"Concentration $c(x,t)$ in $\left[\frac{\mu g}{cm^3} \right]$")
+    plt.ylabel(r"Retardation factor $R(c)$")
+    if path is not None:
+        plt.savefig(path + "_ret.pdf")
+    else:
+        plt.show()
+    plt.close()
+
+
 
 def plot_losses(losses, path):
         shift = abs(np.min(losses)) + 0.0001
         plot_losses = [x + shift for x in losses]
         plt.plot(plot_losses)
         plt.yscale('log')
-        plt.savefig(path)
+        plt.savefig(path+".pdf")
+
+
+def plot_losses_elbo(losses, likes, priors, path):
+    shift = abs(min(np.min(priors), np.min(likes), np.min(losses))) + 0.0001
+    plot_losses = [x + shift for x in losses]
+    plot_likes = [x + shift for x in likes]
+    plot_priors = [x + shift for x in priors]
+    plt.plot(plot_losses, label = "added loss", linewidth=1)
+    plt.plot(plot_likes, label = "likelihoods", linewidth=1)
+    plt.plot(plot_priors, label = "priors", linewidth=1)
+    plt.yscale('log')
+    plt.legend()
+    plt.savefig(path+".pdf")
+
+
+
+def animate_training(image_collection,save_path):
+    '''
+    Animates a collection of images
+    ________________
+    |              | W
+    |              | I
+    |              | D
+    |              | T
+    | L E N G T H  | H
+    ________________
+    '''
+    img = np.array(image_collection)
+    frames, width, length = np.shape(img)
+    abs_length = 3
+    rel_width = abs_length * width/length
+
+    fig= plt.figure()
+    fig.set_size_inches(abs_length,rel_width)
+    ax = plt.Axes(fig, [0.,0.,1.,1.])
+    ax.set_axis_off()
+    fig.add_axes(ax)
+
+
+    
+    image = ax.imshow(img[0,:,:], cmap = 'viridis')
+    def animate(i):
+        image.set(data = img[i,:,:])
+
+    anim = a.FuncAnimation(fig, animate, interval = 1000, frames = frames-1)
+
+    writergif = a.PillowWriter(fps=10)
+    anim.save(save_path +".gif", writer=writergif)
+
 

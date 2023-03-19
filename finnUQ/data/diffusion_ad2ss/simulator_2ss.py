@@ -7,7 +7,8 @@ from typing import Optional
 
 
 class Simulator(object):
-    """Solves Advection-Diffusion equation including Two-Site sorption.
+    """
+    Solves Advection-Diffusion equation including Two-Site sorption.
     """
     def __init__(self, d_e: float, n_e: float, rho_s: float, beta: float,
                  f: float, k_d: float, cw_0: float, t_max: float,
@@ -18,7 +19,8 @@ class Simulator(object):
                  x_stop_soil: Optional[float] = None,
                  alpha_l_sand: Optional[float] = None,
                  v_e_sand: Optional[float] = None,
-                 is_noisy:bool = False):
+                 is_noisy:bool = False,
+                 noise:float = 0):
         """Constructor method initializing the parameters.
 
         Args:
@@ -58,15 +60,15 @@ class Simulator(object):
         self.x_steps = x_steps
         self.a_k = a_k
         self.t_steps = t_steps
-        self.rho_s = rho_s
+        self.rho_s = rho_s * (1-n_e) #TODO: ADDED FROM ME
         self.sand = sand
 
 
         #TODO: Noises
+        #Noise is a shifted uniform
         self.is_noisy = is_noisy
         self.noises = []
-        self.noise_factor = 0.1
-        
+        self.noise_factor = noise
 
         if self.sand:
             self.n_e_sand = n_e_sand
@@ -162,6 +164,7 @@ class Simulator(object):
         """Simple explicit Euler to integrate ode."""
 
         for i in range(len(self.t)-1):
+            print(i)
             u[:, i+1] = u[:, i] + self.dt*self.ad_ode(t=i, conc_cw_sk=u[:, i])
         return u
 
@@ -207,8 +210,8 @@ class Simulator(object):
                 noise = self.noise_factor/2 * cw_soil * (self.noise - 0.5) 
             else:
                 noise = 0
-            ret[self.x_start:self.x_stop] = 1/ (self.f * \
-                self.sorpt_derivat(cw_soil) * (self.rho_s/self.n_e) + 1) + noise
+            ret[self.x_start:self.x_stop] = 1/ (1 + self.f * \
+                self.sorpt_derivat(cw_soil) * (self.rho_s/self.n_e)) + noise
             ##########################################################
 
 
@@ -250,3 +253,4 @@ class Simulator(object):
         conc_cw_sk_new[self.x_steps:] = sk_new
 
         return conc_cw_sk_new
+

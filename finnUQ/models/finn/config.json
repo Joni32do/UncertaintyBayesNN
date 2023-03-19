@@ -20,15 +20,15 @@
 	
 	"model": {
 		   "name": "diff-ad2ss",
-		   "number": 81,
-		   "layer_sizes": [1,8,8,1]
+		   "number": 317,
+		   "layer_sizes": [1,8,4,8,1]
 		   
 	},
 	"bayes": {
 		"is_bayes": true,
 		"pretrain_epochs": 50,
 		"sort": false,
-		"bayes_arc": [0,0,4,1],
+		"bayes_arc": [0.5],
 		"runs": 20
 
 	},

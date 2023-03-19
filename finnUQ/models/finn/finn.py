@@ -954,7 +954,7 @@ class FINN_DiffAD2ssBayes(FINN):
         This function constructs a feedforward NN required for calculation
         of constitutive function (or flux multiplier) as a function of u.
         """
-        return BayesianNet(self.layer_sizes, self.bayes_arc)
+        return BayesianNet(self.layer_sizes, self.bayes_arc, init_pretrain = False)
         
         '''
         
@@ -1108,7 +1108,8 @@ class FINN_DiffAD2ssBayes(FINN):
             # functional relation can be learned in the sand.
             if not self.learn_r_hyd:
                 ret = th.ones(self.Nx)
-                a =f_mod*k_d_mod*beta_mod
+                rho_e = (1-self.n_e)*self.rho_s/self.n_e
+                a = rho_e * f_mod*k_d_mod*beta_mod
                 ret[self.x_start:self.x_stop] = 1/(1+(a*cw_soil**(beta_mod-1)))
             else:
                 # According to definitions R(c) >= 1, scaling is needed since potentially

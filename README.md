@@ -48,6 +48,7 @@ Two methods:
     
     * Ommited but possible interesting investigations would be vertical bayes:
      $$[[0, 0, 1],[0, 0, 1, 0],[0, 0, 0, 1, 0],[0, 0, 1, 0, 0]]$$
+     $$,[[0,0],[0,1],[0,0],[0,0]], [[0,0],[1,1],[0,0],[0,0]]$$
 
 Improvements:
 
@@ -59,7 +60,24 @@ Improvements:
 * Extends the two sided sorption approach of Gültig
 * UQ is done with best BNN from Meta analysis
 
+## FINAL
 
+    #############################
+    ## T R A I N I N G   E N D ##
+    #############################
+
+    Trained parameters:
+    FINAL
+
+    Total time: 2875.0 seconds -> 0.8 hours
+
+    The best model is:
+            Architecture:  [1, 8, 4, 8, 1]
+            Bayes Archi: [1]
+    at try 2
+    The best average model is:
+            Architecture:  [1, 32, 1]
+            Bayes Archi: [[0, 1]]
 
 
 ## Dependencies

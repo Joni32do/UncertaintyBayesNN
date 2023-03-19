@@ -1,0 +1,37 @@
+{
+  "data": {
+    "n_train": 201,
+    "n_bars": 21,
+    "n_samples": 100,
+    "n_plot": 100,
+    "noise": 0.1,
+    "noise_fn": "*",
+    "is_log": true,
+    "lin": { "min": 0, "max": 1 },
+    "log": { "min": -2, "max": 0 },
+    "params": { "k_d": 1.5, "beta": 0.7, "rho": 1.58, "n_e": 0.4, "f": 0.3 }
+  },
+  "training": {
+    "rho": -4,
+    "epochs": 55000,
+    "pretrain_epochs": 50000,
+    "learning_rate": 0.003,
+    "sort": true,
+    "logging": false,
+    "loss_fn": "elbo",
+    "elbo": { "noise": 0.01, "samples": 5, "kl_weight": 0 }
+  },
+  "build": {
+    "n_params": 100,
+    "architectures": [
+      [1, 32, 1],
+      [1, 8, 8, 1],
+      [1, 8, 4, 8, 1],
+      [1, 4, 9, 4, 1]
+    ],
+    "bayes_arcs": [[0], [0.1], [0.5], [1], [[0, 1]], [[0, -1]]],
+    "all_combinations_possible": true,
+    "tries": 3
+  },
+  "result": { "n_net": 72, "time": 2875.174926996231 }
+}
